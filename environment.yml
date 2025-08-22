@@ -1,0 +1,15 @@
+name: alphazero_env
+channels:
+  - pytorch
+  - defaults
+dependencies:
+  - python=3.9
+  - pytorch>=1.7.0
+  - torchvision
+  - numpy>=1.19.2
+  - matplotlib>=3.3.2
+  - tqdm>=4.50.2
+  - pillow>=8.0.0
+  - pip
+  - pip:
+    - ipykernel  # 如果您想要在Jupyter中使用这个环境
