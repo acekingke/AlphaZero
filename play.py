@@ -51,7 +51,7 @@ class AlphaZeroPlayer(OthelloPlayer):
         self.model = AlphaZeroNetwork(game_size=8, device=self.device)
         
         # Load the trained model
-        checkpoint = torch.load(model_path, map_location=self.device)
+        checkpoint = torch.load(model_path, map_location=self.device,weights_only=True)
         self.model.load_state_dict(checkpoint['model_state_dict'])
         self.model.to(self.device)
         self.model.eval()

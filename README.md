@@ -22,14 +22,35 @@ AlphaZero/
 
 ## Requirements
 
+本项目推荐使用 Conda 来管理环境，同时也支持使用 pip。
+
+### 使用 Conda (推荐)
+
+项目根目录下的 `environment.yml` 文件包含了所有必需的依赖项。
+
+1.  **创建 Conda 环境:**
+    打开终端，运行以下命令来创建名为 `alphazero_env` 的环境。
+    ```bash
+    conda env create -f environment.yml
+    ```
+
+2.  **激活环境:**
+    在运行任何项目脚本之前，都需要先激活该环境。
+    ```bash
+    conda activate alphazero_env
+    ```
+
+### 使用 Pip
+
+如果您不使用 Conda，也可以通过 `requirements.txt` 文件来安装依赖。
+
 - Python 3.7+
 - PyTorch 1.7+
 - NumPy
 - Matplotlib
 - tqdm
 
-Install dependencies:
-
+运行以下命令安装：
 ```bash
 pip install -r requirements.txt
 ```
@@ -48,18 +69,42 @@ AlphaZero consists of three main components:
 
 ## Usage
 
+您可以通过以下两种方式之一来运行项目脚本：
+
+1.  **使用 `conda run` (推荐):**
+    这种方式无需手动激活环境，可以直接在命令前指定环境名称。下面的所有示例都将采用这种方式。
+
+2.  **先激活环境:**
+    您也可以先激活环境，然后在该终端会话中直接运行 `python` 命令。
+    ```bash
+    conda activate alphazero_env
+    # 之后就可以直接运行, 例如: python main.py train ...
+    ```
+
 ### Training
 
-Train the AlphaZero model from scratch:
+从零开始训练 AlphaZero 模型:
 
 ```bash
-python main.py train --iterations 50 --self_play_games 100 --mcts_simulations 800
+conda run -n alphazero_env python main.py train --iterations 50 --self_play_games 100 --mcts_simulations 800 --use_mps
 ```
 
 Resume training from a checkpoint:
 
 ```bash
-python main.py train --resume ./models/checkpoint_10.pt
+conda run -n alphazero_env python main.py train --resume ./models/checkpoint_10.pt --use_mps
+```
+
+Set the MCTS exploration constant (`c_puct`) from the command line (default is 1.0). For example, to resume training from `checkpoint_7.pt` and use `c_puct=2.5`:
+
+```bash
+conda run -n alphazero_env python main.py train --resume ./models/checkpoint_7.pt --c_puct 2.5 --use_mps
+```
+
+You can also set other training hyperparameters when creating the trainer, for example:
+
+```bash
+conda run -n alphazero_env python main.py train --iterations 20 --self_play_games 150 --mcts_simulations 1000 --batch_size 256 --c_puct 2.5 --use_mps
 ```
 
 ### Playing Against the Model
@@ -67,7 +112,7 @@ python main.py train --resume ./models/checkpoint_10.pt
 Play against the trained model:
 
 ```bash
-python main.py play --model ./models/checkpoint_49.pt --player_color black
+conda run -n alphazero_env python main.py play --model ./models/checkpoint_49.pt --player_color black --use_mps
 ```
 
 ### Evaluating the Model
@@ -75,7 +120,7 @@ python main.py play --model ./models/checkpoint_49.pt --player_color black
 Evaluate the model against a random player:
 
 ```bash
-python main.py evaluate --model ./models/checkpoint_49.pt --num_games 50
+conda run -n alphazero_env python main.py evaluate --model ./models/checkpoint_7.pt --num_games 50 --mcts_simulations 800
 ```
 
 ### Comparing Models
@@ -83,7 +128,7 @@ python main.py evaluate --model ./models/checkpoint_49.pt --num_games 50
 Compare two different models:
 
 ```bash
-python main.py compare --model1 ./models/checkpoint_30.pt --model2 ./models/checkpoint_49.pt --num_games 50
+conda run -n alphazero_env python main.py compare --model1 ./models/checkpoint_30.pt --model2 ./models/checkpoint_49.pt --num_games 50 --use_mps
 ```
 
 ## Rules of Othello

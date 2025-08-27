@@ -19,6 +19,7 @@ def main():
     train_parser.add_argument('--iterations', type=int, default=50, help='Number of training iterations')
     train_parser.add_argument('--self_play_games', type=int, default=100, help='Number of self-play games per iteration')
     train_parser.add_argument('--mcts_simulations', type=int, default=800, help='Number of MCTS simulations per move')
+    train_parser.add_argument('--c_puct', type=float, default=1.0, help='c_puct value for MCTS (exploration constant)')
     train_parser.add_argument('--batch_size', type=int, default=128, help='Batch size for training')
     train_parser.add_argument('--resume', type=str, help='Path to checkpoint to resume training from')
     train_parser.add_argument('--use_mps', action='store_true', help='Use MPS acceleration on macOS if available')
@@ -58,6 +59,7 @@ def main():
             num_iterations=args.iterations,
             num_self_play_games=args.self_play_games,
             num_mcts_simulations=args.mcts_simulations,
+            c_puct=args.c_puct,
             batch_size=args.batch_size,
             use_mps=args.use_mps,
             use_cuda=not args.use_cpu
