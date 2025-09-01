@@ -15,7 +15,7 @@ class TestOthelloFlipDirection(unittest.TestCase):
     
     def test_flip_direction_simple(self):
         """测试基本的翻转功能"""
-        board = OthelloBoard(size=8)
+        board = OthelloBoard(size=6)
         
         # 初始状态
         initial_state = board.board.copy()
@@ -29,7 +29,7 @@ class TestOthelloFlipDirection(unittest.TestCase):
         self.assertEqual(board.board[3][3], -1)
         
         # 创建一个新棋盘，手动测试 _flip_direction 函数
-        test_board = OthelloBoard(size=8)
+        test_board = OthelloBoard(size=6)
         # 模拟黑方刚刚在(2, 3)放置了棋子
         test_board.board[2][3] = -1
         test_board.current_player = -1
@@ -42,18 +42,16 @@ class TestOthelloFlipDirection(unittest.TestCase):
     
     def test_flip_direction_multiple_pieces(self):
         """测试翻转多个棋子"""
-        board = OthelloBoard(size=8)
+        board = OthelloBoard(size=6)
         
         # 设置一个可以翻转多个棋子的局面
         board.board = np.array([
-            [0, 0, 0, 0, 0, 0, 0, 0],
-            [0, 0, 0, 0, 0, 0, 0, 0],
-            [0, 0, 0, -1, 0, 0, 0, 0],
-            [0, 0, 0, 1, 0, 0, 0, 0],
-            [0, 0, 0, 1, 0, 0, 0, 0],
-            [0, 0, 0, 1, 0, 0, 0, 0],
-            [0, 0, 0, 0, 0, 0, 0, 0],
-            [0, 0, 0, 0, 0, 0, 0, 0]
+            [0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0],
+            [0, 0, 0, -1, 0, 0],
+            [0, 0, 0, 1, 0, 0],
+            [0, 0, 0, 1, 0, 0],
+            [0, 0, 0, 1, 0, 0]
         ])
         board.current_player = -1  # 黑方
         
@@ -67,18 +65,16 @@ class TestOthelloFlipDirection(unittest.TestCase):
     
     def test_flip_direction_no_flip(self):
         """测试不满足翻转条件的情况"""
-        board = OthelloBoard(size=8)
+        board = OthelloBoard(size=6)
         
         # 设置一个不能形成翻转的局面
         board.board = np.array([
-            [0, 0, 0, 0, 0, 0, 0, 0],
-            [0, 0, 0, 0, 0, 0, 0, 0],
-            [0, 0, 0, -1, 0, 0, 0, 0],
-            [0, 0, 0, 0, 0, 0, 0, 0],
-            [0, 0, 0, 1, 0, 0, 0, 0],
-            [0, 0, 0, 0, 0, 0, 0, 0],
-            [0, 0, 0, 0, 0, 0, 0, 0],
-            [0, 0, 0, 0, 0, 0, 0, 0]
+            [0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0],
+            [0, 0, 0, -1, 0, 0],
+            [0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 1, 0, 0],
+            [0, 0, 0, 0, 0, 0]
         ])
         board.current_player = -1  # 黑方
         
@@ -93,18 +89,16 @@ class TestOthelloFlipDirection(unittest.TestCase):
     
     def test_flip_direction_boundary_edge(self):
         """测试边缘位置的翻转"""
-        board = OthelloBoard(size=8)
+        board = OthelloBoard(size=6)
         
         # 设置一个边缘翻转的局面
         board.board = np.array([
-            [-1, 1, 1, 1, 1, 1, 1, -1],
-            [0, 0, 0, 0, 0, 0, 0, 0],
-            [0, 0, 0, 0, 0, 0, 0, 0],
-            [0, 0, 0, 1, -1, 0, 0, 0],
-            [0, 0, 0, -1, 1, 0, 0, 0],
-            [0, 0, 0, 0, 0, 0, 0, 0],
-            [0, 0, 0, 0, 0, 0, 0, 0],
-            [-1, 0, 0, 0, 0, 0, 0, 0]
+            [-1, 1, 1, 1, 1, -1],
+            [0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 1, -1, 0],
+            [0, 0, 0, -1, 1, 0],
+            [0, 0, 0, 0, 0, 0]
         ])
         board.current_player = -1  # 黑方
         
@@ -113,23 +107,21 @@ class TestOthelloFlipDirection(unittest.TestCase):
         board._flip_direction(0, 0, 0, 1)  # 方向为向右
         
         # 验证边缘棋子被翻转
-        for i in range(1, 7):
+        for i in range(1, 5):
             self.assertEqual(board.board[0][i], -1, f"Position (0, {i}) should be flipped to black")
     
     def test_flip_direction_boundary_corner(self):
         """测试角落位置的翻转"""
-        board = OthelloBoard(size=8)
+        board = OthelloBoard(size=6)
         
         # 设置一个角落翻转的局面
         board.board = np.array([
-            [0, 1, 0, 0, 0, 0, 0, 0],
-            [1, 1, 0, 0, 0, 0, 0, 0],
-            [0, 0, -1, 0, 0, 0, 0, 0],
-            [0, 0, 0, 1, -1, 0, 0, 0],
-            [0, 0, 0, -1, 1, 0, 0, 0],
-            [0, 0, 0, 0, 0, 0, 0, 0],
-            [0, 0, 0, 0, 0, 0, 0, 0],
-            [0, 0, 0, 0, 0, 0, 0, 0]
+            [0, 1, 0, 0, 0, 0],
+            [1, 1, 0, 0, 0, 0],
+            [0, 0, -1, 0, 0, 0],
+            [0, 0, 0, 1, -1, 0],
+            [0, 0, 0, -1, 1, 0],
+            [0, 0, 0, 0, 0, 0]
         ])
         board.current_player = -1  # 黑方
         
@@ -141,18 +133,16 @@ class TestOthelloFlipDirection(unittest.TestCase):
     
     def test_flip_direction_diagonal(self):
         """测试对角线方向的翻转"""
-        board = OthelloBoard(size=8)
+        board = OthelloBoard(size=6)
         
         # 设置一个对角线翻转的局面
         board.board = np.array([
-            [0, 0, 0, 0, 0, 0, 0, 0],
-            [0, 0, 0, 0, 0, 0, 0, 0],
-            [0, 0, 0, 0, 0, 0, 0, 0],
-            [0, 0, 0, 1, 1, 0, 0, 0],
-            [0, 0, 0, 1, -1, 0, 0, 0],
-            [0, 0, 0, 0, 0, -1, 0, 0],
-            [0, 0, 0, 0, 0, 0, 0, 0],
-            [0, 0, 0, 0, 0, 0, 0, 0]
+            [0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 1, 1, 0],
+            [0, 0, 0, 1, -1, 0],
+            [0, 0, 0, 0, 0, -1]
         ])
         board.current_player = 1  # 白方
         
@@ -164,18 +154,16 @@ class TestOthelloFlipDirection(unittest.TestCase):
     
     def test_flip_direction_long_distance(self):
         """测试长距离翻转"""
-        board = OthelloBoard(size=8)
+        board = OthelloBoard(size=6)
         
         # 设置一个长距离翻转的局面
         board.board = np.array([
-            [0, 0, 0, 0, 0, 0, 0, -1],
-            [0, 0, 0, 0, 0, 0, 1, 0],
-            [0, 0, 0, 0, 0, 1, 0, 0],
-            [0, 0, 0, 0, 1, 0, 0, 0],
-            [0, 0, 0, 1, 0, 0, 0, 0],
-            [0, 0, 1, 0, 0, 0, 0, 0],
-            [0, 1, 0, 0, 0, 0, 0, 0],
-            [0, 0, 0, 0, 0, 0, 0, 0]
+            [0, 0, 0, 0, 0, -1],
+            [0, 0, 0, 0, 0, 1],
+            [0, 0, 0, 0, 1, 0],
+            [0, 0, 0, 1, 0, 0],
+            [0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0]
         ])
         board.current_player = -1  # 黑方
         
@@ -183,7 +171,7 @@ class TestOthelloFlipDirection(unittest.TestCase):
         board._flip_direction(7, 0, -1, 1)  # 方向为右上
         
         # 验证长距离翻转
-        for i in range(1, 7):
+        for i in range(1, 5):
             self.assertEqual(board.board[7-i][i], -1, f"Position ({7-i}, {i}) should be flipped to black")
 
 class TestOthelloPassTurn(unittest.TestCase):
@@ -193,7 +181,7 @@ class TestOthelloPassTurn(unittest.TestCase):
     
     def test_pass_turn_simple(self):
         """测试基本的回合传递功能"""
-        board = OthelloBoard(size=8)
+        board = OthelloBoard(size=6)
         
         # 初始玩家是黑方(-1)
         self.assertEqual(board.current_player, -1)
@@ -212,7 +200,7 @@ class TestOthelloPassTurn(unittest.TestCase):
     
     def test_pass_turn_twice(self):
         """测试连续两次回合传递导致游戏结束"""
-        board = OthelloBoard(size=8)
+        board = OthelloBoard(size=6)
         
         # 第一次回合传递
         board.pass_turn()
@@ -231,7 +219,7 @@ class TestOthelloPassTurn(unittest.TestCase):
     
     def test_pass_turn_then_move(self):
         """测试一次回合传递后再下棋"""
-        board = OthelloBoard(size=8)
+        board = OthelloBoard(size=6)
         
         # 初始玩家是黑方(-1)
         self.assertEqual(board.current_player, -1)
@@ -255,10 +243,10 @@ class TestOthelloPassTurn(unittest.TestCase):
     
     def test_pass_turn_no_valid_moves(self):
         """测试没有有效移动时的回合传递"""
-        board = OthelloBoard(size=8)
+        board = OthelloBoard(size=6)
         
         # 设置一个特殊的棋盘状态，使当前玩家没有有效移动，但对手有
-        board.board = np.zeros((8, 8), dtype=np.int8)
+        board.board = np.zeros((6, 6), dtype=np.int8)
         board.board[3][3] = 1  # White
         board.board[2:5, 2:5] = -1  # Black square
         board.board[3][3] = 1  # Restore white piece in the middle
@@ -278,14 +266,16 @@ class TestOthelloPassTurn(unittest.TestCase):
     
     def test_pass_turn_game_over_detection(self):
         """测试通过回合传递检测游戏结束"""
-        board = OthelloBoard(size=4)  # 使用小尺寸棋盘便于测试
+        board = OthelloBoard(size=6)  # 使用小尺寸棋盘便于测试
         
         # 设置一个即将结束的游戏状态
         board.board = np.array([
-            [-1, -1, -1, -1],
-            [-1, -1, -1, -1],
-            [-1, -1, -1, -1],
-            [-1, -1, -1, 0]
+            [-1, -1, -1, -1, -1, -1],
+            [-1, -1, -1, -1, -1, -1],
+            [-1, -1, -1, -1, -1, -1],
+            [-1, -1, -1, -1, -1, 0],
+            [0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0]
         ])
         board.current_player = 1  # 白方，没有可用的移动
         
@@ -301,14 +291,16 @@ class TestOthelloPassTurn(unittest.TestCase):
     
     def test_pass_turn_with_full_board(self):
         """测试棋盘已满时的回合传递"""
-        board = OthelloBoard(size=4)
+        board = OthelloBoard(size=6)
         
         # 设置一个已满的棋盘
         board.board = np.array([
-            [1, 1, 1, 1],
-            [1, 1, 1, 1],
-            [1, 1, 1, 1],
-            [1, 1, 1, 1]
+            [1, 1, 1, 1, 1, 1],
+            [1, 1, 1, 1, 1, 1],
+            [1, 1, 1, 1, 1, 1],
+            [1, 1, 1, 1, 1, 1],
+            [1, 1, 1, 1, 1, 1],
+            [1, 1, 1, 1, 1, 1]
         ])
         board.current_player = -1  # 黑方
         

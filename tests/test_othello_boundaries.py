@@ -16,46 +16,42 @@ class TestOthelloIsValidMoveBoundaries(unittest.TestCase):
     def test_board_edge_moves(self):
         """测试棋盘边缘的移动"""
         # 创建一个自定义棋盘，使边缘位置有效
-        board = OthelloBoard(size=8)
+        board = OthelloBoard(size=6)
         # 手动设置棋盘状态，使得边缘位置成为有效移动
         # 0 = 空, 1 = 白, -1 = 黑
         # 当前轮到黑方(-1)移动
         board.board = np.array([
-            [0, 0, 0, 0, 0, 0, 0, 0],
-            [0, 0, 0, 0, 0, 0, 0, 0],
-            [0, 0, 0, 0, 0, 0, 0, 0],
-            [0, 0, 0, 1, 1, 0, 0, 0],
-            [0, 0, 0, 1, 1, 1, 0, 0],
-            [0, 0, 0, 0, 0, 0, 0, 0],
-            [0, 0, 0, 0, 0, 0, 0, 0],
-            [0, 0, 0, 0, 0, 0, 0, 0]
+            [0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 1, 1, 0],
+            [0, 0, 0, 1, 1, 1],
+            [0, 0, 0, 0, 0, 0]
         ])
         board.current_player = -1  # 黑方
         
-        # 测试边缘位置 (5, 7)，应该是无效移动
-        self.assertFalse(board._is_valid_move(5, 7))
+        # 测试边缘位置 (4, 5)，应该是无效移动
+        self.assertFalse(board._is_valid_move(4, 5))
         
         # 修改棋盘使边缘位置成为有效移动
-        board.board[5][6] = 1  # 白方棋子
-        board.board[6][7] = 1  # 白方棋子
+        board.board[4][4] = 1  # 白方棋子
+        board.board[5][5] = 1  # 白方棋子
         
         # 检查边缘位置是否正确计算
-        # 注意：在这个布局中，实际上 (7, 7) 不是有效移动，因为没有形成夹击
-        self.assertFalse(board._is_valid_move(7, 7))
+        # 注意：在这个布局中，实际上 (5, 5) 不是有效移动，因为没有形成夹击
+        self.assertFalse(board._is_valid_move(5, 5))
     
     def test_corner_moves(self):
         """测试角落位置的移动"""
         # 创建棋盘使角落位置有效
-        board = OthelloBoard(size=8)
+        board = OthelloBoard(size=6)
         board.board = np.array([
-            [0, 1, 0, 0, 0, 0, 0, 0],
-            [1, -1, 0, 0, 0, 0, 0, 0],
-            [0, 0, 0, 0, 0, 0, 0, 0],
-            [0, 0, 0, 1, -1, 0, 0, 0],
-            [0, 0, 0, -1, 1, 0, 0, 0],
-            [0, 0, 0, 0, 0, 0, 0, 0],
-            [0, 0, 0, 0, 0, 0, -1, 1],
-            [0, 0, 0, 0, 0, 0, 1, 0]
+            [0, 1, 0, 0, 0, 0],
+            [1, -1, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 1, -1, 0],
+            [0, 0, 0, -1, 1, 0],
+            [0, 0, 0, 0, 0, 0]
         ])
         
         # 测试各个角落
@@ -64,10 +60,10 @@ class TestOthelloIsValidMoveBoundaries(unittest.TestCase):
         self.assertFalse(board._is_valid_move(0, 0))  # 左上角
         
         # 创建一个新的测试棋盘，专门测试角落移动
-        corner_board = OthelloBoard(size=8)
+        corner_board = OthelloBoard(size=6)
         
         # 设置一个特殊情况，使得黑方可以在左上角(0,0)位置形成有效移动
-        corner_board.board = np.zeros((8, 8), dtype=np.int8)
+        corner_board.board = np.zeros((6, 6), dtype=np.int8)
         corner_board.board[0][1] = 1  # 白方棋子
         corner_board.board[1][1] = 1  # 白方棋子
         corner_board.board[2][2] = -1  # 黑方棋子
@@ -77,8 +73,8 @@ class TestOthelloIsValidMoveBoundaries(unittest.TestCase):
         self.assertTrue(corner_board._is_valid_move(0, 0))
         
         # 再创建一个测试角落的棋盘
-        corner_board2 = OthelloBoard(size=8)
-        corner_board2.board = np.zeros((8, 8), dtype=np.int8)
+        corner_board2 = OthelloBoard(size=6)
+        corner_board2.board = np.zeros((6, 6), dtype=np.int8)
         corner_board2.board[0][1] = 1  # 白方棋子
         corner_board2.board[1][0] = 1  # 白方棋子
         corner_board2.board[1][1] = 1  # 白方棋子
@@ -113,51 +109,45 @@ class TestOthelloIsValidMoveBoundaries(unittest.TestCase):
     
     def test_long_distance_flips(self):
         """测试长距离翻转的移动"""
-        board = OthelloBoard(size=8)
+        board = OthelloBoard(size=6)
         # 设置一个长距离翻转的情况
         board.board = np.array([
-            [0, 0, 0, 0, 0, 0, 0, 0],
-            [0, 0, 0, 0, 0, 0, 0, 0],
-            [0, 0, 0, 0, 0, 0, 0, 0],
-            [0, 0, -1, 1, 1, 1, 1, 0],
-            [0, 0, 0, 0, 0, 0, 0, 0],
-            [0, 0, 0, 0, 0, 0, 0, 0],
-            [0, 0, 0, 0, 0, 0, 0, 0],
-            [0, 0, 0, 0, 0, 0, 0, 0]
+            [0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0],
+            [0, 0, -1, 1, 1, 1],
+            [0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0]
         ])
         board.current_player = -1  # 黑方
         
         # 检查长距离翻转
-        self.assertTrue(board._is_valid_move(3, 7))
+        self.assertTrue(board._is_valid_move(3, 6))
         
         # 检查更极端的长距离翻转
         board.board = np.array([
-            [0, 0, 0, 0, 0, 0, 0, -1],
-            [0, 0, 0, 0, 0, 0, 1, 0],
-            [0, 0, 0, 0, 0, 1, 0, 0],
-            [0, 0, 0, 0, 1, 0, 0, 0],
-            [0, 0, 0, 1, 0, 0, 0, 0],
-            [0, 0, 1, 0, 0, 0, 0, 0],
-            [0, 1, 0, 0, 0, 0, 0, 0],
-            [0, 0, 0, 0, 0, 0, 0, 0]
+            [0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 1],
+            [0, 0, 0, 0, 1, 0],
+            [0, 0, 0, 1, 0, 0],
+            [0, 0, 1, 0, 0, 0]
         ])
         board.current_player = -1  # 黑方
         
-        self.assertTrue(board._is_valid_move(7, 0))
+        self.assertTrue(board._is_valid_move(5, 0))
     
     def test_multi_direction_flips(self):
         """测试多方向翻转的移动"""
-        board = OthelloBoard(size=8)
+        board = OthelloBoard(size=6)
         # 设置可以在多个方向翻转棋子的情况
         board.board = np.array([
-            [0, 0, 0, 0, 0, 0, 0, 0],
-            [0, 0, 0, 0, 0, 0, 0, 0],
-            [0, 0, 0, 1, 0, 0, 0, 0],
-            [0, 0, 1, 1, 1, 0, 0, 0],
-            [0, 0, 0, 1, 0, 0, 0, 0],
-            [0, 0, 0, -1, 0, 0, 0, 0],
-            [0, 0, 0, 0, 0, 0, 0, 0],
-            [0, 0, 0, 0, 0, 0, 0, 0]
+            [0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 1, 0, 0],
+            [0, 0, 1, 1, 1, 0],
+            [0, 0, 0, 1, 0, 0],
+            [0, 0, 0, -1, 0, 0]
         ])
         board.current_player = -1  # 黑方
         
@@ -167,17 +157,15 @@ class TestOthelloIsValidMoveBoundaries(unittest.TestCase):
         self.assertFalse(board._is_valid_move(3, 2))  # 左方实际上不构成夹击
         
         # 创建一个新的多方向测试棋盘
-        multi_dir_board = OthelloBoard(size=8)
+        multi_dir_board = OthelloBoard(size=6)
         # 设置一个确保会形成有效夹击的棋盘
         multi_dir_board.board = np.array([
-            [0, 0, 0, 0, 0, 0, 0, 0],
-            [0, 0, 0, 0, 0, 0, 0, 0],
-            [0, 0, 0, 0, 0, 0, 0, 0],
-            [0, 0, -1, 0, -1, 0, 0, 0],
-            [0, 0, 1, 1, 1, 0, 0, 0],
-            [0, 0, 0, 0, 0, 0, 0, 0],
-            [0, 0, 0, 0, 0, 0, 0, 0],
-            [0, 0, 0, 0, 0, 0, 0, 0]
+            [0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0],
+            [0, 0, -1, 0, -1, 0],
+            [0, 0, 1, 1, 1, 0],
+            [0, 0, 0, 0, 0, 0]
         ])
         multi_dir_board.current_player = -1  # 黑方
         
@@ -186,16 +174,14 @@ class TestOthelloIsValidMoveBoundaries(unittest.TestCase):
         self.assertFalse(multi_dir_board._is_valid_move(3, 3))
         
         # 创建一个更简单但明确的布局
-        simple_board = OthelloBoard(size=8)
+        simple_board = OthelloBoard(size=6)
         simple_board.board = np.array([
-            [0, 0, 0, 0, 0, 0, 0, 0],
-            [0, 0, 0, 0, 0, 0, 0, 0],
-            [0, 0, 0, 0, 0, 0, 0, 0],
-            [0, 0, 0, 1, -1, 0, 0, 0],  # 标准的初始局面
-            [0, 0, 0, -1, 1, 0, 0, 0],  # 标准的初始局面
-            [0, 0, 0, 0, 0, 0, 0, 0],
-            [0, 0, 0, 0, 0, 0, 0, 0],
-            [0, 0, 0, 0, 0, 0, 0, 0]
+            [0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 1, -1, 0],  # 标准的初始局面
+            [0, 0, 0, -1, 1, 0],  # 标准的初始局面
+            [0, 0, 0, 0, 0, 0]
         ])
         simple_board.current_player = -1  # 黑方
         
@@ -206,17 +192,15 @@ class TestOthelloIsValidMoveBoundaries(unittest.TestCase):
         self.assertTrue(simple_board._is_valid_move(5, 4))
         
         # 创建一个四方向测试棋盘
-        four_dir_board = OthelloBoard(size=8)
+        four_dir_board = OthelloBoard(size=6)
         # 设置一个更加简单的棋盘布局
         four_dir_board.board = np.array([
-            [0, 0, 0, 0, 0, 0, 0, 0],
-            [0, 0, 0, -1, 0, 0, 0, 0],
-            [0, 0, 0, 1, 0, 0, 0, 0],
-            [0, -1, 1, 0, 1, -1, 0, 0],
-            [0, 0, 0, 1, 0, 0, 0, 0],
-            [0, 0, 0, -1, 0, 0, 0, 0],
-            [0, 0, 0, 0, 0, 0, 0, 0],
-            [0, 0, 0, 0, 0, 0, 0, 0]
+            [0, 0, 0, 0, 0, 0],
+            [0, 0, 0, -1, 0, 0],
+            [0, 0, 0, 1, 0, 0],
+            [0, -1, 1, 0, 1, -1],
+            [0, 0, 0, 1, 0, 0],
+            [0, 0, 0, -1, 0, 0]
         ])
         four_dir_board.current_player = -1  # 黑方
         
@@ -225,18 +209,16 @@ class TestOthelloIsValidMoveBoundaries(unittest.TestCase):
         
     def test_no_flips_move(self):
         """测试无法翻转任何棋子的移动"""
-        board = OthelloBoard(size=8)
+        board = OthelloBoard(size=6)
         
         # 设置棋盘，使某些位置虽然毗邻对手棋子，但无法形成夹击
         board.board = np.array([
-            [0, 0, 0, 0, 0, 0, 0, 0],
-            [0, 0, 0, 0, 0, 0, 0, 0],
-            [0, 0, 0, 0, 0, 0, 0, 0],
-            [0, 0, 0, 1, -1, 0, 0, 0],
-            [0, 0, 0, -1, 1, 0, 0, 0],
-            [0, 0, 0, 0, 0, 0, 0, 0],
-            [0, 0, 0, 0, 0, 0, 0, 0],
-            [0, 0, 0, 0, 0, 0, 0, 0]
+            [0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 1, -1, 0],
+            [0, 0, 0, -1, 1, 0],
+            [0, 0, 0, 0, 0, 0]
         ])
         board.current_player = -1  # 黑方
         
@@ -255,23 +237,23 @@ class TestOthelloIsValidMoveBoundaries(unittest.TestCase):
         # 从之前的测试结果看，_is_valid_move 函数实际上并没有进行边界检查
         
         # 所以我们应该测试棋盘边界（但在有效范围内）的位置
-        board = OthelloBoard(size=8)
+        board = OthelloBoard(size=6)
         
         # 在边界但有效的位置（这些位置本身是有效的，但不构成有效的落子点）
         self.assertFalse(board._is_valid_move(0, 0))  # 左上角
-        self.assertFalse(board._is_valid_move(0, 7))  # 右上角
-        self.assertFalse(board._is_valid_move(7, 0))  # 左下角
-        self.assertFalse(board._is_valid_move(7, 7))  # 右下角
+        self.assertFalse(board._is_valid_move(0, 5))  # 右上角
+        self.assertFalse(board._is_valid_move(5, 0))  # 左下角
+        self.assertFalse(board._is_valid_move(5, 5))  # 右下角
         
         # 测试边缘位置
         self.assertFalse(board._is_valid_move(0, 3))  # 上边缘
-        self.assertFalse(board._is_valid_move(7, 3))  # 下边缘
+        self.assertFalse(board._is_valid_move(5, 3))  # 下边缘
         self.assertFalse(board._is_valid_move(3, 0))  # 左边缘
-        self.assertFalse(board._is_valid_move(3, 7))  # 右边缘
+        self.assertFalse(board._is_valid_move(3, 5))  # 右边缘
         
     def test_already_occupied(self):
         """测试已经有棋子的位置"""
-        board = OthelloBoard(size=8)
+        board = OthelloBoard(size=6)
         
         # 已有棋子的位置
         self.assertFalse(board._is_valid_move(3, 3))  # 白方棋子位置
@@ -315,32 +297,32 @@ class TestOthelloIsValidMoveBoundaries(unittest.TestCase):
     
     def test_single_piece_board(self):
         """测试只有一个棋子的情况"""
-        board = OthelloBoard(size=8)
+        board = OthelloBoard(size=6)
         
         # 设置只有一个棋子的棋盘
-        board.board = np.zeros((8, 8), dtype=np.int8)
+        board.board = np.zeros((6, 6), dtype=np.int8)
         board.board[3][3] = 1  # 白方棋子
         board.current_player = -1  # 黑方
         
         # 周围应该没有有效移动
-        for i in range(8):
-            for j in range(8):
+        for i in range(6):
+            for j in range(6):
                 if i == 3 and j == 3:
                     continue  # 跳过已有棋子的位置
                 self.assertFalse(board._is_valid_move(i, j))
     
     def test_full_board(self):
         """测试棋盘填满的情况"""
-        board = OthelloBoard(size=8)
+        board = OthelloBoard(size=6)
         
         # 设置填满的棋盘（交替放置黑白棋子）
-        for i in range(8):
-            for j in range(8):
+        for i in range(6):
+            for j in range(6):
                 board.board[i][j] = 1 if (i + j) % 2 == 0 else -1
         
         # 所有位置都不应该是有效移动
-        for i in range(8):
-            for j in range(8):
+        for i in range(6):
+            for j in range(6):
                 self.assertFalse(board._is_valid_move(i, j))
 
 if __name__ == '__main__':

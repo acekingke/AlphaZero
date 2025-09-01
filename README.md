@@ -1,23 +1,23 @@
-# AlphaZero for Othello (Reversi)
+# AlphaZero 黑白棋（奥赛罗）
 
-This project implements AlphaZero for the game of Othello (also known as Reversi) using PyTorch. AlphaZero is a deep reinforcement learning algorithm developed by DeepMind that combines Monte Carlo Tree Search (MCTS) with deep neural networks to achieve superhuman performance in board games.
+本项目使用 PyTorch 为黑白棋（又称奥赛罗）实现了 AlphaZero 算法。AlphaZero 是 DeepMind 开发的深度强化学习算法，它结合了蒙特卡洛树搜索（MCTS）和深度神经网络，在棋类游戏中达到超人水平的表现。
 
-## Project Structure
+## 项目结构
 
 ```
 AlphaZero/
 ├── env/
-│   └── othello.py         # Othello game environment
+│   └── othello.py         # 黑白棋游戏环境
 ├── models/
-│   └── neural_network.py  # Neural network architecture
+│   └── neural_network.py  # 神经网络架构
 ├── mcts/
-│   └── mcts.py            # Monte Carlo Tree Search implementation
-├── utils/                 # Utility functions
-├── train.py               # Training module
-├── play.py                # Play against the trained model
-├── evaluate.py            # Evaluate model performance
-├── main.py                # Main entry point
-└── requirements.txt       # Project dependencies
+│   └── mcts.py            # 蒙特卡洛树搜索实现
+├── utils/                 # 工具函数
+├── train.py               # 训练模块
+├── play.py                # 与训练好的模型对战
+├── evaluate.py            # 评估模型性能
+├── main.py                # 主入口点
+└── requirements.txt       # 项目依赖
 ```
 
 ## Requirements
@@ -55,17 +55,17 @@ AlphaZero/
 pip install -r requirements.txt
 ```
 
-## How It Works
+## 工作原理
 
-AlphaZero consists of three main components:
+AlphaZero 由三个主要组件组成：
 
-1. **Neural Network**: A deep residual network that takes the game state as input and outputs:
-   - A policy (probability distribution over all possible moves)
-   - A value (estimated outcome of the game)
+1. **神经网络**：一个深度残差网络，接收游戏状态作为输入并输出：
+   - 策略（所有可能走法的概率分布）
+   - 价值（游戏结果的预估）
 
-2. **Monte Carlo Tree Search (MCTS)**: Uses the neural network's predictions to guide the search for the best move.
+2. **蒙特卡洛树搜索（MCTS）**：使用神经网络的预测来指导搜索最佳走法。
 
-3. **Self-Play Training**: The model improves by playing against itself and learning from the generated data.
+3. **自我对弈训练**：模型通过与自己对弈并从生成的数据中学习来不断提升。
 
 ## Usage
 
@@ -86,100 +86,157 @@ AlphaZero consists of three main components:
 从零开始训练 AlphaZero 模型:
 
 ```bash
-conda run -n alphazero_env python main.py train --iterations 50 --self_play_games 100 --mcts_simulations 800 --use_mps
+conda run -n alphazero_env python main.py train - `--iterations`: 50 # 训练迭代次数，每次迭代包含了自我对弈、训练和评估三个步骤
+- `--self_play_games`: 100 # 每次训练迭代中，自我对弈的对局数目
+- `--mcts_simulations`: 100 # 每个动作的MCTS搜索模拟次数。训练推荐100次（平衡探索与速度），人机对战推荐200次（更好的性能），评估和比较推荐100次
+- `--c_puct`: 3.0 # MCTS中的UCB1公式中的参数，控制了探索与利用的权重，建议值为3.0 --use_mps
 ```
 
-Resume training from a checkpoint:
+
+例如，基于上述默认参数的训练示例命令（快速启动）：
+
+```bash
+conda run -n alphazero_env python main.py train --iterations 50 --self_play_games 100 \
+    --mcts_simulations 25 --c_puct 3 --use_mps
+```
+
+从检查点恢复训练：
 
 ```bash
 conda run -n alphazero_env python main.py train --resume ./models/checkpoint_10.pt --use_mps
 ```
 
-Set the MCTS exploration constant (`c_puct`) from the command line (default is 1.0). For example, to resume training from `checkpoint_7.pt` and use `c_puct=2.5`:
+从命令行设置 MCTS 探索常数（`c_puct`）（默认为 1.0）。例如，从 `checkpoint_7.pt` 恢复训练并使用 `c_puct=2.5`：
 
 ```bash
 conda run -n alphazero_env python main.py train --resume ./models/checkpoint_7.pt --c_puct 2.5 --use_mps
 ```
 
-You can also set other training hyperparameters when creating the trainer, for example:
+您还可以在创建训练器时设置其他训练超参数，例如：
 
 ```bash
-conda run -n alphazero_env python main.py train --iterations 20 --self_play_games 150 --mcts_simulations 1000 --batch_size 256 --c_puct 2.5 --use_mps
+conda run -n alphazero_env python main.py train --iterations 20 --self_play_games 100 --mcts_simulations 25 --batch_size 256 --c_puct 3 --use_mps
 ```
 
-### Playing Against the Model
-
-Play against the trained model:
+您可以启用多进程来加速自我对弈生成（推荐在 CPU 核心较多的系统上使用）：
 
 ```bash
-conda run -n alphazero_env python main.py play --model ./models/checkpoint_49.pt --player_color black --use_mps
+conda run -n alphazero_env python main.py train --iterations 20 --self_play_games 100 \
+    --mcts_simulations 25 --c_puct 3 --use_multiprocessing --mp_num_workers 4 --mp_games_per_worker 5
 ```
 
-### Evaluating the Model
+注意：
+- `--use_multiprocessing` 启用自我对弈的多进程处理（使用 `multiprocessing.Pool`）。
+- `--mp_num_workers` 设置工作进程数（如果未提供，默认为 CPU 核心数 - 1）。
+- `--mp_games_per_worker` 控制每个工作进程每个任务运行多少局游戏；增加此值可减少进程调度开销。
 
-Evaluate the model against a random player:
+### 与训练好的模型对战
+
+与训练好的模型对战：
 
 ```bash
-conda run -n alphazero_env python main.py evaluate --model ./models/checkpoint_7.pt --num_games 50 --mcts_simulations 800
+conda run -n alphazero_env python main.py play --model ./models/checkpoint_XXX.pt --player_color white --mcts_simulations 200
 ```
 
-### Comparing Models
+### 评估模型
 
-Compare two different models:
+对抗随机玩家评估模型：
 
 ```bash
-conda run -n alphazero_env python main.py compare --model1 ./models/checkpoint_30.pt --model2 ./models/checkpoint_49.pt --num_games 50 --use_mps
+conda run -n alphazero_env python main.py evaluate --model ./models/checkpoint_XXX.pt --num_games 20 --mcts_simulations 100
 ```
 
-## Rules of Othello
+### 比较不同模型
 
-Othello is played on an 8x8 board. The game starts with four pieces in the center: two black and two white. Players take turns placing pieces of their color, with black going first.
+比较两个不同的模型：
 
-A valid move must:
-1. Be placed on an empty square
-2. Capture at least one of the opponent's pieces
+```bash
+python main.py compare --model1 ./models/checkpoint_XXX.pt --model2 ./models/checkpoint_YYY.pt --num_games 20 --mcts_simulations 100
+```
 
-Capture occurs by "sandwiching" opponent pieces between the newly placed piece and another piece of the current player's color.
+## 黑白棋规则
 
-The game ends when:
-1. Both players pass consecutively
-2. The board is completely filled
+黑白棋在 8×8 的棋盘上进行。游戏开始时中央有四个棋子：两黑两白。玩家轮流放置自己颜色的棋子，黑方先行。
 
-The player with more pieces on the board wins.
+有效走法必须：
+1. 放在空格上
+2. 至少吃掉对手的一个棋子
 
-## Implementation Details
+吃子是通过在新放置的棋子和玩家已有的棋子之间"夹住"对手的棋子来实现的。
 
-### Neural Network Architecture
+游戏结束条件：
+1. 双方连续跳过（无子可走）
+2. 棋盘完全填满
 
-The neural network consists of:
-- An input convolutional layer
-- Multiple residual blocks
-- Two heads:
-  - Policy head: Outputs probabilities for each move
-  - Value head: Estimates the game outcome
+棋盘上棋子多的玩家获胜。
 
-### MCTS Algorithm
+## 实现细节
 
-The Monte Carlo Tree Search algorithm uses the neural network to guide the search:
-1. **Selection**: Traverse the tree using UCB (Upper Confidence Bound) formula
-2. **Expansion and Evaluation**: Use the neural network to evaluate new positions
-3. **Backpropagation**: Update values in the tree
-4. **Play**: Select the most promising move
+### 神经网络架构
 
-### Training Process
+神经网络由以下部分组成：
+- 输入卷积层
+- 多个残差块
+- 两个输出头：
+  - 策略头：输出每个走法的概率
+  - 价值头：预估游戏结果
 
-1. **Self-play**: The current model plays against itself to generate training data
-2. **Training**: The neural network is trained on the generated data
-3. **Repeat**: The improved model is used for more self-play, creating a learning cycle
+### MCTS 算法
 
-## Future Improvements
+蒙特卡洛树搜索算法使用神经网络指导搜索：
+1. **选择**：使用 UCB（上置信界）公式遍历树
+2. **扩展和评估**：使用神经网络评估新位置
+3. **反向传播**：更新树中的值
+4. **选择走法**：选择最有希望的走法
 
-- Implement multi-threading for faster self-play
-- Add a GUI for playing against the model
-- Extend to other board games
-- Optimize hyperparameters
-- Implement a progressive curriculum for training
+MCTS在每个节点的选择阶段使用UCB公式：
 
-## License
+$$Q(s, a) + c_{\text{puct}} \cdot P(s, a) \cdot \frac{\sqrt{\sum_b N(s, b)}}{1 + N(s, a)}$$
+
+其中：
+- $Q(s, a)$ 是行动 $a$ 在状态 $s$ 的预期奖励
+- $P(s, a)$ 是神经网络预测的先验概率
+- $N(s, a)$ 是行动 $a$ 在状态 $s$ 被访问的次数
+- $c_{\text{puct}}$ 是控制探索与利用平衡的常数
+
+### 训练过程
+
+1. **自我对弈**：当前模型与自己对弈生成训练数据
+2. **训练**：神经网络在生成的数据上进行训练
+3. **重复**：改进后的模型用于更多的自我对弈，形成学习循环
+
+#### 关键损失函数
+
+训练过程使用两个损失函数的组合：
+
+**策略损失函数**：
+$$\mathcal{L}_{\text{policy}} = -\frac{1}{N} \sum_{i=1}^{N} \sum_{a} \pi_i(a) \log(p_\theta(a|s_i))$$
+
+其中:
+- $N$ 是批次大小
+- $\pi_i(a)$ 是从MCTS得到的策略分布
+- $p_\theta(a|s_i)$ 是神经网络预测的策略分布
+- $s_i$ 是游戏状态
+- $a$ 表示可能的动作
+
+**价值损失函数**：
+$$\mathcal{L}_{\text{value}} = \frac{1}{N} \sum_{i=1}^{N} (v_i - V_\theta(s_i))^2$$
+
+其中:
+- $v_i$ 是游戏结果的真实值
+- $V_\theta(s_i)$ 是神经网络预测的价值
+
+**总损失函数**：
+$$\mathcal{L}_{\text{total}} = \mathcal{L}_{\text{policy}} + \mathcal{L}_{\text{value}}$$
+
+## 未来改进
+
+- 实现多线程以加速自我对弈
+- 添加图形用户界面以便与模型对战
+- 扩展到其他棋盘游戏
+- 优化超参数
+- 实现渐进式课程学习训练
+
+## 许可证
 
 MIT

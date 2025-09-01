@@ -54,12 +54,12 @@ class Node:
 
 class MCTS:
     """Monte Carlo Tree Search algorithm implementation."""
-    def __init__(self, model, c_puct=2.0, num_simulations=800, dirichlet_alpha=0.5, dirichlet_weight=0.3):
+    def __init__(self, model, c_puct=1.0, num_simulations=800, dirichlet_alpha=0.3, dirichlet_weight=0.25):
         self.model = model
-        self.c_puct = c_puct  # 增加探索倾向
-        self.num_simulations = num_simulations  # 增加搜索深度
-        self.dirichlet_alpha = dirichlet_alpha  # 控制噪声分布的集中度
-        self.dirichlet_weight = dirichlet_weight  # 控制噪声的影响程度
+        self.c_puct = c_puct
+        self.num_simulations = num_simulations
+        self.dirichlet_alpha = dirichlet_alpha
+        self.dirichlet_weight = dirichlet_weight
         
     def search(self, state, env, temperature=1.0, add_noise=False):
         """

@@ -43,12 +43,12 @@ class HumanPlayer(OthelloPlayer):
 
 class AlphaZeroPlayer(OthelloPlayer):
     """Player that uses the trained AlphaZero model."""
-    def __init__(self, model_path, num_simulations=800, c_puct=1.0, use_mps=True):
+    def __init__(self, model_path, num_simulations=800, c_puct=2.0, use_mps=True):
         # Get best available device
         self.device = get_device(use_mps=use_mps)
         print(f"Using device: {self.device} for AlphaZero player")
         
-        self.model = AlphaZeroNetwork(game_size=8, device=self.device)
+        self.model = AlphaZeroNetwork(game_size=6, device=self.device)
         
         # Load the trained model
         checkpoint = torch.load(model_path, map_location=self.device,weights_only=True)
@@ -84,7 +84,7 @@ class RandomPlayer(OthelloPlayer):
 
 def play_game(black_player, white_player, render=True):
     """Play a game between two players."""
-    env = OthelloEnv(size=8)
+    env = OthelloEnv(size=6)
     env.reset()
     
     if render:
@@ -133,7 +133,7 @@ def main():
     parser = argparse.ArgumentParser(description='Play Othello against AlphaZero')
     parser.add_argument('--model', type=str, required=True, help='Path to the trained model checkpoint')
     parser.add_argument('--player_color', type=str, default='black', choices=['black', 'white'], help='Player color (black or white)')
-    parser.add_argument('--mcts_simulations', type=int, default=800, help='Number of MCTS simulations')
+    parser.add_argument('--mcts_simulations', type=int, default=25, help='Number of MCTS simulations')
     args = parser.parse_args()
     
     # Create players

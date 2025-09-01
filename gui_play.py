@@ -14,7 +14,7 @@ from models.neural_network import AlphaZeroNetwork
 from mcts.mcts import MCTS
 
 class OthelloGUI(tk.Tk):
-    def __init__(self, board_size=8, square_size=60, num_simulations=400, c_puct=1.0):
+    def __init__(self, board_size=6, square_size=60, num_simulations=800, c_puct=2.5):
         super().__init__()
         self.title("Othello - You vs AlphaZero")
         self.board_size = board_size
@@ -32,6 +32,8 @@ class OthelloGUI(tk.Tk):
         self.human_player_id = -1 # Human is Black
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        if torch.backends.mps.is_available():
+            self.device = torch.device("mps")
         self.model = self.load_model()
         print(f"Using device: {self.device} for AI player")
         self.mcts = MCTS(self.model, c_puct=c_puct, num_simulations=num_simulations)
@@ -41,21 +43,10 @@ class OthelloGUI(tk.Tk):
         self.reset_game()
 
     def load_model(self):
-        model = AlphaZeroNetwork(game_size=self.board_size, device=self.device)
-        # Find the latest checkpoint
-        checkpoints = [f for f in os.listdir('models') if f.startswith('checkpoint_') and f.endswith('.pt')]
-        print(checkpoints)
-        if not checkpoints:
-            messagebox.showerror("Error", "No model checkpoint found in 'models/' directory.")
-            self.destroy()
-            return None
+        model = AlphaZeroNetwork(game_size=6, num_channels=128, device=self.device)
+        #print("Loading model from checkpoint_32.pt")
+        checkpoint = torch.load('./models/checkpoint_33.pt', map_location=self.device)
         
-        latest_checkpoint_file = sorted(checkpoints, key=lambda x: int(x.split('_')[1].split('.')[0]), reverse=True)[0]
-        #latest_checkpoint_file = "checkpoint_4.pt"
-        print(f"Loading model from {latest_checkpoint_file}")
-        checkpoint = torch.load(os.path.join('models', latest_checkpoint_file), map_location=self.device, weights_only=True)
-
-        # The model might be saved directly or inside a dictionary
         if 'model_state_dict' in checkpoint:
             model.load_state_dict(checkpoint['model_state_dict'])
         else:

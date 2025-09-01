@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import math
 import numpy as np
 import torch
@@ -49,33 +51,26 @@ class Node:
         """Expand the node with the given policy."""
         self.state = state
         for action, prob in enumerate(policy):
-            if prob > 0:
-                self.children[action] = Node(prior=prob)
+            if prob > 0:  # Only add children for possible actions
+                self.children[action] = Node(prob)
 
-class MCTS:
-    """Monte Carlo Tree Search algorithm implementation."""
-    def __init__(self, model, c_puct=2.0, num_simulations=800, dirichlet_alpha=0.5, dirichlet_weight=0.3):
+class FixedMCTS:
+    """Fixed MCTS implementation with corrected value backpropagation."""
+    
+    def __init__(self, model, c_puct=1.0, num_simulations=100, dirichlet_alpha=0.3, dirichlet_weight=0.25):
         self.model = model
-        self.c_puct = c_puct  # 增加探索倾向
-        self.num_simulations = num_simulations  # 增加搜索深度
-        self.dirichlet_alpha = dirichlet_alpha  # 控制噪声分布的集中度
-        self.dirichlet_weight = dirichlet_weight  # 控制噪声的影响程度
+        self.c_puct = c_puct
+        self.num_simulations = num_simulations
+        self.dirichlet_alpha = dirichlet_alpha
+        self.dirichlet_weight = dirichlet_weight
         
     def search(self, state, env, temperature=1.0, add_noise=False):
         """
         Perform MCTS search starting from the given state.
-        
-        Args:
-            state: Current state of the game
-            env: Game environment
-            temperature: Temperature for action selection
-            add_noise: Whether to add Dirichlet noise to the prior probabilities
-            
-        Returns:
-            Action probabilities based on visit counts
         """
         # Create root node
         root = Node(0)
+        root_player = env.board.current_player  # Remember who's turn it is at root
         
         # Get the initial policy and value from the neural network
         observation = env.board.get_observation()
@@ -83,9 +78,7 @@ class MCTS:
         
         with torch.no_grad():
             try:
-                # Get model device
                 device = next(self.model.parameters()).device
-                # Move tensor to the same device as the model
                 if tensor_obs.device != device:
                     tensor_obs = tensor_obs.to(device)
                 
@@ -93,24 +86,21 @@ class MCTS:
                 policy = torch.softmax(policy_logits, dim=1).squeeze(0).cpu().numpy()
             except Exception as e:
                 print(f"Error in MCTS neural network evaluation: {e}")
-                # Fallback to random policy
                 policy = np.ones(env.get_action_space_size()) / env.get_action_space_size()
         
         # Apply a mask for valid actions
         valid_moves_mask = env.get_valid_moves_mask()
         masked_policy = policy * valid_moves_mask
         
-        # Renormalize the policy if there are valid moves
+        # Renormalize the policy
         policy_sum = np.sum(masked_policy)
         if policy_sum > 0:
             masked_policy /= policy_sum
         else:
-            # If the neural network didn't predict any valid moves, use uniform distribution
             masked_policy = valid_moves_mask / np.sum(valid_moves_mask)
         
-        # Add Dirichlet noise to the root node's policy
+        # Add Dirichlet noise if requested
         if add_noise:
-            # Only apply noise to valid actions
             noise = np.random.dirichlet([self.dirichlet_alpha] * np.sum(valid_moves_mask))
             noise_idx = 0
             noisy_policy = np.copy(masked_policy)
@@ -129,7 +119,6 @@ class MCTS:
             node = root
             search_path = [node]
             env_copy = self._copy_env(env)
-            current_state = state
             
             # Selection
             while node.expanded():
@@ -140,7 +129,6 @@ class MCTS:
                     node = node.children[action]
                     search_path.append(node)
                 else:
-                    # This should not happen if expand is working correctly
                     break
             
             # Get game state after selection
@@ -148,30 +136,35 @@ class MCTS:
             game_ended = env_copy.board.is_done()
             
             if game_ended:
-                # If game is over, use the game result as the value
                 winner = env_copy.board.get_winner()
                 if winner == 0:  # Draw
                     value = 0.0
-                else:  # Convert to value from current player's perspective
-                    value = 1.0 if winner == env_copy.board.current_player else -1.0
+                else:
+                    # Value from ROOT player's perspective
+                    value = 1.0 if winner == root_player else -1.0
             else:
                 # Expansion and evaluation
                 tensor_obs = torch.FloatTensor(observation).unsqueeze(0)
                 
                 with torch.no_grad():
                     try:
-                        # Get model device
                         device = next(self.model.parameters()).device
-                        # Move tensor to the same device as the model
                         if tensor_obs.device != device:
                             tensor_obs = tensor_obs.to(device)
                         
                         policy_logits, value_tensor = self.model(tensor_obs)
                         policy = torch.softmax(policy_logits, dim=1).squeeze(0).cpu().numpy()
-                        value = value_tensor.item()
+                        network_value = value_tensor.item()
+                        
+                        # Convert network value to root player's perspective
+                        # Network gives value from current player's perspective
+                        if env_copy.board.current_player == root_player:
+                            value = network_value
+                        else:
+                            value = -network_value
+                            
                     except Exception as e:
                         print(f"Error in MCTS node evaluation: {e}")
-                        # Fallback to random policy and neutral value
                         policy = np.ones(env_copy.get_action_space_size()) / env_copy.get_action_space_size()
                         value = 0.0
                 
@@ -186,13 +179,13 @@ class MCTS:
                 else:
                     masked_policy = valid_moves_mask / np.sum(valid_moves_mask)
                 
-                node.expand(current_state, masked_policy)
+                node.expand(state, masked_policy)
             
-            # Backpropagation
+            # Backpropagation - value is already from root's perspective
             for node in reversed(search_path):
                 node.value_sum += value
                 node.visit_count += 1
-                value = -value  # Flip the value since we're changing perspectives
+                # No value flipping needed since we already converted to root perspective
         
         # Calculate action probabilities based on visit counts
         action_probs = np.zeros(len(masked_policy))
@@ -200,14 +193,14 @@ class MCTS:
             action_probs[action] = child.visit_count
         
         # Temperature annealing
-        if temperature == 0:  # Deterministic selection
+        if temperature == 0:
             best_action = np.argmax(action_probs)
             action_probs = np.zeros(len(action_probs))
             action_probs[best_action] = 1
-        else:  # Stochastic selection
+        else:
             action_probs = action_probs ** (1 / temperature)
-            # Renormalize
-            action_probs /= np.sum(action_probs)
+            if np.sum(action_probs) > 0:
+                action_probs /= np.sum(action_probs)
         
         return action_probs
     
