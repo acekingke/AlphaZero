@@ -311,10 +311,15 @@ class OthelloEnv:
             if len(self.board.get_valid_moves()) > 0:
                 # Invalid pass
                 return self.board.get_observation(), -10, True, {"valid_moves": self.board.get_valid_moves()}
+            # For pass, we need to preserve who actually made the pass action
+            # because pass_turn() will switch the current_player
+            pass_player = self.board.current_player
             success = self.board.pass_turn()
             if not success and not was_done:
                 # Pass attempt failed, but game was not done
                 return self.board.get_observation(), -10, True, {"valid_moves": self.board.get_valid_moves()}
+            # Use the player who actually made the pass for reward calculation
+            player_who_moved = pass_player
         else:
             row, col = action // self.size, action % self.size
             success = self.board.make_move(row, col)
