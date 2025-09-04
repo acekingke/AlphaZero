@@ -137,8 +137,10 @@ class OthelloGUI(tk.Tk):
             self.status_bar.config(text="AI (White) is thinking...")
             self.update()
 
-            # Get observation for the model
-            state = self.env.board.get_observation()
+            # Get canonical state for consistency with training
+            canonical_state = self.env.board.get_canonical_state()
+            # Convert to observation format (consistent with MCTS)
+            state = self.mcts._canonical_to_observation(canonical_state, self.env)
             
             # Use MCTS to get action probabilities
             action_probs = self.mcts.search(state, self.env, temperature=0)

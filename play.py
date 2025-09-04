@@ -60,7 +60,10 @@ class AlphaZeroPlayer(OthelloPlayer):
     
     def get_action(self, env):
         """Get action from the AlphaZero MCTS."""
-        state = env.board.get_observation()
+        # Use canonical state for consistency with training
+        canonical_state = env.board.get_canonical_state()
+        # Convert to observation format (consistent with MCTS internal conversion)
+        state = self.mcts._canonical_to_observation(canonical_state, env)
         
         # Use MCTS to get action probabilities
         action_probs = self.mcts.search(state, env, temperature=0.1)
