@@ -134,7 +134,13 @@ class MCTS:
         if policy_sum > 0:
             masked_policy /= policy_sum
         else:
-            masked_policy = valid_moves_mask / np.sum(valid_moves_mask)
+            # If no valid moves, this should not happen in normal gameplay
+            # but provide fallback anyway
+            if np.sum(valid_moves_mask) > 0:
+                masked_policy = valid_moves_mask / np.sum(valid_moves_mask)
+            else:
+                # Ultimate fallback - uniform distribution
+                masked_policy = np.ones(env.board.get_action_space_size()) / env.board.get_action_space_size()
         
         return masked_policy, value
     
