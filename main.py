@@ -16,9 +16,11 @@ def main():
     
     # Train command
     train_parser = subparsers.add_parser('train', help='Train the AlphaZero model')
-    train_parser.add_argument('--num_iterations', type=int, default=100, help='Number of training iterations')
+    # Support both --num_iterations (code default) and --iterations (README style) for convenience
+    train_parser.add_argument('--num_iterations', '--iterations', dest='num_iterations', type=int, default=100, help='Number of training iterations')
     train_parser.add_argument('--self_play_games', type=int, default=1000, help='Number of self-play games per iteration')
     train_parser.add_argument('--mcts_simulations', type=int, default=100, help='Number of MCTS simulations per move (recommended: 50-200 for training)')
+    train_parser.add_argument('--temperature', type=float, default=0.8, help='Temperature parameter for MCTS action selection (higher = more exploration)')
     train_parser.add_argument('--c_puct', type=float, default=1.0, help='c_puct value for MCTS (exploration constant)')
     train_parser.add_argument('--batch_size', type=int, default=128, help='Batch size for training')
     train_parser.add_argument('--l2_regularization', type=float, default=1e-4, help='L2 regularization coefficient (c in AlphaZero paper)')
@@ -63,6 +65,7 @@ def main():
             num_iterations=args.num_iterations,
             num_self_play_games=args.self_play_games,
             num_mcts_simulations=args.mcts_simulations,
+            temperature=args.temperature,
             c_puct=args.c_puct,
             batch_size=args.batch_size,
             l2_regularization=args.l2_regularization,
