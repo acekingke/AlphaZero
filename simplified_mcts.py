@@ -49,14 +49,8 @@ class Node:
             if prob > 0:
                 self.children[action] = Node(prior=prob)
 
-class MCTS:
-    """
-    Simplified MCTS implementation with canonical state support and Tree Visitor pattern.
-    This version combines the simplicity of the git version with important improvements:
-    1. Canonical state support for consistent training
-    2. Tree Visitor pattern to avoid stack overflow
-    3. Clean, maintainable architecture
-    """
+class SimplifiedMCTS:
+    """Simplified MCTS implementation with canonical state support and Tree Visitor pattern."""
     
     def __init__(self, model, c_puct=2.0, num_simulations=800, dirichlet_alpha=0.5, dirichlet_weight=0.3):
         self.model = model
@@ -70,7 +64,7 @@ class MCTS:
         Perform MCTS search starting from the given state.
         
         Args:
-            state: Current observation state (already converted from canonical state)
+            state: Current state of the game
             env: Game environment
             temperature: Temperature for action selection
             add_noise: Whether to add Dirichlet noise to the prior probabilities
@@ -81,10 +75,8 @@ class MCTS:
         # Create root node
         root = Node(0)
         
-        # Get canonical state for MCTS tree expansion
+        # Get canonical state and initial policy from neural network
         canonical_state = env.board.get_canonical_state()
-        
-        # Use canonical state for policy evaluation (converted internally)
         policy, value = self._evaluate_state(canonical_state, env)
         
         # Add Dirichlet noise if requested
@@ -99,7 +91,7 @@ class MCTS:
             self._simulate_iterative(root, env)
         
         # Calculate action probabilities based on visit counts
-        return self._get_action_probabilities(root, temperature, env)
+        return self._get_action_probabilities(root, temperature)
     
     def _evaluate_state(self, canonical_state, env):
         """Evaluate state using neural network with canonical state representation."""
@@ -119,7 +111,7 @@ class MCTS:
             except Exception as e:
                 print(f"Error in neural network evaluation: {e}")
                 # Fallback to random policy
-                policy = np.ones(env.board.get_action_space_size()) / env.board.get_action_space_size()
+                policy = np.ones(env.get_action_space_size()) / env.get_action_space_size()
                 value = 0.0
         
         # Apply mask for valid actions
@@ -199,8 +191,8 @@ class MCTS:
             if winner == 0:  # Draw
                 value = 0.0
             else:
-                # 正确的价值计算：对于当前玩家的视角
-                # 如果当前玩家是获胜者，value=1；否则value=-1
+                # Convert winner to canonical perspective
+                # In canonical state, current player is always +1
                 value = 1.0 if winner == env_copy.board.current_player else -1.0
         else:
             # Expansion and evaluation
@@ -218,17 +210,21 @@ class MCTS:
             parent_node.visit_count += 1
             current_value = -current_value  # Flip for next parent
     
-    def _get_action_probabilities(self, root, temperature, env):
+    def _get_action_probabilities(self, root, temperature):
         """Calculate final action probabilities based on visit counts."""
-        # Use environment's action space size for consistency
-        action_space_size = env.board.get_action_space_size()
+        # Get action space size from root's policy
+        action_space_size = len(root.children) if root.children else 1
+        
+        # Find maximum action index to determine proper size
+        max_action = max(root.children.keys()) if root.children else 0
+        action_space_size = max(action_space_size, max_action + 1)
         
         action_probs = np.zeros(action_space_size)
         for action, child in root.children.items():
-            if 0 <= action < action_space_size:  # Enhanced bounds check
+            if action < action_space_size:
                 action_probs[action] = child.visit_count
         
-        # Temperature annealing with numerical stability
+        # Temperature annealing
         if temperature == 0:  # Deterministic selection
             if np.sum(action_probs) > 0:
                 best_action = np.argmax(action_probs)
@@ -236,17 +232,7 @@ class MCTS:
                 action_probs[best_action] = 1
         else:  # Stochastic selection
             if np.sum(action_probs) > 0:
-                # Prevent numerical overflow by setting minimum temperature
-                safe_temperature = max(temperature, 1e-6)
-                
-                # Additional numerical stability: normalize large values
-                max_val = np.max(action_probs)
-                if max_val > 1000:  # Prevent extreme values from causing overflow
-                    action_probs = action_probs / max_val
-                
-                action_probs = action_probs ** (1 / safe_temperature)
+                action_probs = action_probs ** (1 / temperature)
                 action_probs /= np.sum(action_probs)
         
         return action_probs
-# For backward compatibility
-SimplifiedMCTS = MCTS

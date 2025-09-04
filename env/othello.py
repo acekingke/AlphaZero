@@ -55,6 +55,10 @@ class OthelloBoard:
         Returns:
             True if the move is valid, False otherwise
         """
+        # Check bounds first to prevent IndexError
+        if not (0 <= row < self.size and 0 <= col < self.size):
+            return False
+            
         # The cell must be empty
         if self.board[row][col] != 0:
             return False
