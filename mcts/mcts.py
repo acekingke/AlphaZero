@@ -78,6 +78,9 @@ class MCTS:
         Returns:
             Action probabilities based on visit counts
         """
+        # 记录搜索开始时的玩家，用于正确的价值计算
+        self.search_start_player = env.board.current_player
+        
         # Create root node
         root = Node(0)
         
@@ -199,9 +202,9 @@ class MCTS:
             if winner == 0:  # Draw
                 value = 0.0
             else:
-                # 正确的价值计算：对于当前玩家的视角
-                # 如果当前玩家是获胜者，value=1；否则value=-1
-                value = 1.0 if winner == env_copy.board.current_player else -1.0
+                # 正确的价值计算：从搜索开始时的玩家视角
+                # 如果搜索开始的玩家获胜，value=1；否则value=-1
+                value = 1.0 if winner == self.search_start_player else -1.0
         else:
             # Expansion and evaluation
             policy, value = self._evaluate_state(canonical_state, env_copy)

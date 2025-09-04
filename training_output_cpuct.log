@@ -1,0 +1,234 @@
+PyTorch版本: 2.5.1
+✓ MPS可用 - PyTorch可以使用Apple Silicon (M1/M2/M3) GPU加速
+✓ 设备检测成功: MPS设备可用
+
+建议设置:
+device = torch.device('mps')  # 使用MPS加速
+使用MPS设备 (Apple Silicon加速)
+Training will use: mps
+Resuming from iteration 0, continuing for 3 more iterations
+Next iteration: 1/3
+Starting iteration 0/2
+Self-play phase...
+Starting 6 worker processes for 300 games
+Self-play progress:   0%|          | 0/300 [00:00<?, ?it/s]Self-play progress:   3%|▎         | 8/300 [00:31<18:56,  3.89s/it]Self-play progress:   3%|▎         | 8/300 [00:31<18:56,  3.89s/it, games=8/300, avg_moves=32.0, W/L/D=3/3/2]Self-play progress:   5%|▌         | 16/300 [00:31<18:25,  3.89s/it, games=16/300, avg_moves=32.0, W/L/D=2/5/1]Self-play progress:   8%|▊         | 24/300 [00:31<17:54,  3.89s/it, games=24/300, avg_moves=32.0, W/L/D=5/2/1]Self-play progress:  11%|█         | 32/300 [00:31<03:18,  1.35it/s, games=24/300, avg_moves=32.0, W/L/D=5/2/1]Self-play progress:  11%|█         | 32/300 [00:31<03:18,  1.35it/s, games=32/300, avg_moves=31.9, W/L/D=3/3/2]Self-play progress:  13%|█▎        | 40/300 [00:31<03:12,  1.35it/s, games=40/300, avg_moves=32.0, W/L/D=2/5/1]Self-play progress:  16%|█▌        | 48/300 [00:31<03:06,  1.35it/s, games=48/300, avg_moves=32.0, W/L/D=3/4/1]Self-play progress:  16%|█▌        | 48/300 [00:50<03:06,  1.35it/s, games=48/300, avg_moves=32.0, W/L/D=3/4/1]Self-play progress:  19%|█▊        | 56/300 [00:58<03:53,  1.04it/s, games=48/300, avg_moves=32.0, W/L/D=3/4/1]Self-play progress:  19%|█▊        | 56/300 [00:58<03:53,  1.04it/s, games=56/300, avg_moves=31.6, W/L/D=6/2/0]Self-play progress:  21%|██▏       | 64/300 [00:58<03:01,  1.30it/s, games=56/300, avg_moves=31.6, W/L/D=6/2/0]Self-play progress:  21%|██▏       | 64/300 [00:58<03:01,  1.30it/s, games=64/300, avg_moves=32.0, W/L/D=4/4/0]Self-play progress:  24%|██▍       | 72/300 [00:59<02:54,  1.30it/s, games=72/300, avg_moves=32.0, W/L/D=5/3/0]Self-play progress:  27%|██▋       | 80/300 [00:59<01:47,  2.05it/s, games=72/300, avg_moves=32.0, W/L/D=5/3/0]Self-play progress:  27%|██▋       | 80/300 [00:59<01:47,  2.05it/s, games=80/300, avg_moves=32.0, W/L/D=5/2/1]Self-play progress:  29%|██▉       | 88/300 [00:59<01:43,  2.05it/s, games=88/300, avg_moves=31.9, W/L/D=4/4/0]Self-play progress:  32%|███▏      | 96/300 [00:59<01:05,  3.10it/s, games=88/300, avg_moves=31.9, W/L/D=4/4/0]Self-play progress:  32%|███▏      | 96/300 [00:59<01:05,  3.10it/s, games=96/300, avg_moves=32.0, W/L/D=3/4/1]Self-play progress:  32%|███▏      | 96/300 [01:10<01:05,  3.10it/s, games=96/300, avg_moves=32.0, W/L/D=3/4/1]Self-play progress:  35%|███▍      | 104/300 [01:26<03:03,  1.07it/s, games=96/300, avg_moves=32.0, W/L/D=3/4/1]Self-play progress:  35%|███▍      | 104/300 [01:26<03:03,  1.07it/s, games=104/300, avg_moves=32.0, W/L/D=1/6/1]Self-play progress:  37%|███▋      | 112/300 [01:26<02:17,  1.36it/s, games=104/300, avg_moves=32.0, W/L/D=1/6/1]Self-play progress:  37%|███▋      | 112/300 [01:26<02:17,  1.36it/s, games=112/300, avg_moves=32.0, W/L/D=6/0/2]Self-play progress:  40%|████      | 120/300 [01:26<02:12,  1.36it/s, games=120/300, avg_moves=32.0, W/L/D=7/1/0]Self-play progress:  43%|████▎     | 128/300 [01:26<01:18,  2.20it/s, games=120/300, avg_moves=32.0, W/L/D=7/1/0]Self-play progress:  43%|████▎     | 128/300 [01:26<01:18,  2.20it/s, games=128/300, avg_moves=32.0, W/L/D=3/5/0]Self-play progress:  45%|████▌     | 136/300 [01:27<01:14,  2.20it/s, games=136/300, avg_moves=32.0, W/L/D=7/1/0]Self-play progress:  48%|████▊     | 144/300 [01:27<00:47,  3.31it/s, games=136/300, avg_moves=32.0, W/L/D=7/1/0]Self-play progress:  48%|████▊     | 144/300 [01:27<00:47,  3.31it/s, games=144/300, avg_moves=32.0, W/L/D=3/5/0]Self-play progress:  48%|████▊     | 144/300 [01:40<00:47,  3.31it/s, games=144/300, avg_moves=32.0, W/L/D=3/5/0]Self-play progress:  51%|█████     | 152/300 [01:54<02:16,  1.08it/s, games=144/300, avg_moves=32.0, W/L/D=3/5/0]Self-play progress:  51%|█████     | 152/300 [01:54<02:16,  1.08it/s, games=152/300, avg_moves=32.0, W/L/D=6/1/1]Self-play progress:  53%|█████▎    | 160/300 [01:54<01:40,  1.39it/s, games=152/300, avg_moves=32.0, W/L/D=6/1/1]Self-play progress:  53%|█████▎    | 160/300 [01:54<01:40,  1.39it/s, games=160/300, avg_moves=31.9, W/L/D=4/4/0]Self-play progress:  56%|█████▌    | 168/300 [01:54<01:12,  1.82it/s, games=160/300, avg_moves=31.9, W/L/D=4/4/0]Self-play progress:  56%|█████▌    | 168/300 [01:54<01:12,  1.82it/s, games=168/300, avg_moves=31.9, W/L/D=6/2/0]Self-play progress:  59%|█████▊    | 176/300 [01:54<00:51,  2.40it/s, games=168/300, avg_moves=31.9, W/L/D=6/2/0]Self-play progress:  59%|█████▊    | 176/300 [01:54<00:51,  2.40it/s, games=176/300, avg_moves=32.0, W/L/D=4/4/0]Self-play progress:  61%|██████▏   | 184/300 [01:55<00:37,  3.13it/s, games=176/300, avg_moves=32.0, W/L/D=4/4/0]Self-play progress:  61%|██████▏   | 184/300 [01:55<00:37,  3.13it/s, games=184/300, avg_moves=32.0, W/L/D=3/5/0]Self-play progress:  64%|██████▍   | 192/300 [01:55<00:25,  4.22it/s, games=184/300, avg_moves=32.0, W/L/D=3/5/0]Self-play progress:  64%|██████▍   | 192/300 [01:55<00:25,  4.22it/s, games=192/300, avg_moves=32.0, W/L/D=3/4/1]Self-play progress:  64%|██████▍   | 192/300 [02:10<00:25,  4.22it/s, games=192/300, avg_moves=32.0, W/L/D=3/4/1]Self-play progress:  67%|██████▋   | 200/300 [02:21<01:50,  1.11s/it, games=192/300, avg_moves=32.0, W/L/D=3/4/1]Self-play progress:  67%|██████▋   | 200/300 [02:21<01:50,  1.11s/it, games=200/300, avg_moves=32.0, W/L/D=2/5/1]Self-play progress:  69%|██████▉   | 208/300 [02:22<01:13,  1.26it/s, games=200/300, avg_moves=32.0, W/L/D=2/5/1]Self-play progress:  69%|██████▉   | 208/300 [02:22<01:13,  1.26it/s, games=208/300, avg_moves=32.0, W/L/D=5/0/3]Self-play progress:  72%|███████▏  | 216/300 [02:22<00:48,  1.72it/s, games=208/300, avg_moves=32.0, W/L/D=5/0/3]Self-play progress:  72%|███████▏  | 216/300 [02:22<00:48,  1.72it/s, games=216/300, avg_moves=32.0, W/L/D=4/2/2]Self-play progress:  75%|███████▍  | 224/300 [02:22<00:31,  2.42it/s, games=216/300, avg_moves=32.0, W/L/D=4/2/2]Self-play progress:  75%|███████▍  | 224/300 [02:22<00:31,  2.42it/s, games=224/300, avg_moves=31.8, W/L/D=5/3/0]Self-play progress:  77%|███████▋  | 232/300 [02:23<00:21,  3.20it/s, games=224/300, avg_moves=31.8, W/L/D=5/3/0]Self-play progress:  77%|███████▋  | 232/300 [02:23<00:21,  3.20it/s, games=232/300, avg_moves=32.0, W/L/D=4/3/1]Self-play progress:  80%|████████  | 240/300 [02:23<00:13,  4.40it/s, games=232/300, avg_moves=32.0, W/L/D=4/3/1]Self-play progress:  80%|████████  | 240/300 [02:23<00:13,  4.40it/s, games=240/300, avg_moves=32.0, W/L/D=2/5/1]Self-play progress:  80%|████████  | 240/300 [02:40<00:13,  4.40it/s, games=240/300, avg_moves=32.0, W/L/D=2/5/1]Self-play progress:  83%|████████▎ | 248/300 [02:49<00:57,  1.11s/it, games=240/300, avg_moves=32.0, W/L/D=2/5/1]Self-play progress:  83%|████████▎ | 248/300 [02:49<00:57,  1.11s/it, games=248/300, avg_moves=32.0, W/L/D=6/2/0]Self-play progress:  85%|████████▌ | 256/300 [02:49<00:35,  1.24it/s, games=248/300, avg_moves=32.0, W/L/D=6/2/0]Self-play progress:  85%|████████▌ | 256/300 [02:49<00:35,  1.24it/s, games=256/300, avg_moves=31.8, W/L/D=3/5/0]Self-play progress:  88%|████████▊ | 264/300 [02:50<00:20,  1.75it/s, games=256/300, avg_moves=31.8, W/L/D=3/5/0]Self-play progress:  88%|████████▊ | 264/300 [02:50<00:20,  1.75it/s, games=264/300, avg_moves=32.0, W/L/D=3/4/1]Self-play progress:  91%|█████████ | 272/300 [02:50<00:11,  2.33it/s, games=264/300, avg_moves=32.0, W/L/D=3/4/1]Self-play progress:  91%|█████████ | 272/300 [02:50<00:11,  2.33it/s, games=272/300, avg_moves=31.9, W/L/D=4/4/0]Self-play progress:  93%|█████████▎| 280/300 [02:51<00:06,  3.09it/s, games=272/300, avg_moves=31.9, W/L/D=4/4/0]Self-play progress:  93%|█████████▎| 280/300 [02:51<00:06,  3.09it/s, games=280/300, avg_moves=32.0, W/L/D=8/0/0]Self-play progress:  96%|█████████▌| 288/300 [02:51<00:03,  3.09it/s, games=288/300, avg_moves=31.9, W/L/D=5/2/1]Self-play progress:  97%|█████████▋| 292/300 [02:58<00:03,  2.29it/s, games=288/300, avg_moves=31.9, W/L/D=5/2/1]Self-play progress:  97%|█████████▋| 292/300 [02:58<00:03,  2.29it/s, games=292/300, avg_moves=32.0, W/L/D=1/3/0]Self-play progress: 100%|██████████| 300/300 [03:05<00:00,  1.83it/s, games=292/300, avg_moves=32.0, W/L/D=1/3/0]Self-play progress: 100%|██████████| 300/300 [03:05<00:00,  1.83it/s, games=300/300, avg_moves=31.9, W/L/D=4/3/1]Self-play progress: 100%|██████████| 300/300 [03:05<00:00,  1.62it/s, games=300/300, avg_moves=31.9, W/L/D=4/3/1]
+
+Completed: 8/300 games (2.7%)
+Average moves per game: 32.0
+Outcomes - Win: 3, Loss: 3, Draw: 2
+Worker progress: SpawnPoolWorker-2: 8
+
+Completed: 32/300 games (10.7%)
+Average moves per game: 32.0
+Outcomes - Win: 13, Loss: 13, Draw: 6
+Worker progress: SpawnPoolWorker-2: 8, SpawnPoolWorker-5: 8, SpawnPoolWorker-1: 8, SpawnPoolWorker-3: 8
+
+Completed: 64/300 games (21.3%)
+Average moves per game: 31.9
+Outcomes - Win: 28, Loss: 28, Draw: 8
+Worker progress: SpawnPoolWorker-2: 16, SpawnPoolWorker-5: 8, SpawnPoolWorker-1: 16, SpawnPoolWorker-3: 8, SpawnPoolWorker-4: 8, SpawnPoolWorker-6: 8
+
+Completed: 96/300 games (32.0%)
+Average moves per game: 31.9
+Outcomes - Win: 45, Loss: 41, Draw: 10
+Worker progress: SpawnPoolWorker-2: 16, SpawnPoolWorker-5: 16, SpawnPoolWorker-1: 16, SpawnPoolWorker-3: 16, SpawnPoolWorker-4: 16, SpawnPoolWorker-6: 16
+
+Completed: 120/300 games (40.0%)
+Average moves per game: 32.0
+Outcomes - Win: 59, Loss: 48, Draw: 13
+Worker progress: SpawnPoolWorker-2: 16, SpawnPoolWorker-5: 24, SpawnPoolWorker-1: 24, SpawnPoolWorker-3: 24, SpawnPoolWorker-4: 16, SpawnPoolWorker-6: 16
+
+Completed: 128/300 games (42.7%)
+Average moves per game: 32.0
+Outcomes - Win: 62, Loss: 53, Draw: 13
+Worker progress: SpawnPoolWorker-2: 16, SpawnPoolWorker-5: 24, SpawnPoolWorker-1: 24, SpawnPoolWorker-3: 24, SpawnPoolWorker-4: 16, SpawnPoolWorker-6: 24
+
+Completed: 152/300 games (50.7%)
+Average moves per game: 32.0
+Outcomes - Win: 78, Loss: 60, Draw: 14
+Worker progress: SpawnPoolWorker-2: 24, SpawnPoolWorker-5: 24, SpawnPoolWorker-1: 32, SpawnPoolWorker-3: 24, SpawnPoolWorker-4: 24, SpawnPoolWorker-6: 24
+
+Completed: 184/300 games (61.3%)
+Average moves per game: 32.0
+Outcomes - Win: 95, Loss: 75, Draw: 14
+Worker progress: SpawnPoolWorker-2: 32, SpawnPoolWorker-5: 32, SpawnPoolWorker-1: 32, SpawnPoolWorker-3: 32, SpawnPoolWorker-4: 24, SpawnPoolWorker-6: 32
+
+Completed: 216/300 games (72.0%)
+Average moves per game: 32.0
+Outcomes - Win: 109, Loss: 86, Draw: 21
+Worker progress: SpawnPoolWorker-2: 32, SpawnPoolWorker-5: 40, SpawnPoolWorker-1: 40, SpawnPoolWorker-3: 32, SpawnPoolWorker-4: 32, SpawnPoolWorker-6: 40
+
+Completed: 240/300 games (80.0%)
+Average moves per game: 32.0
+Outcomes - Win: 120, Loss: 97, Draw: 23
+Worker progress: SpawnPoolWorker-2: 40, SpawnPoolWorker-5: 40, SpawnPoolWorker-1: 40, SpawnPoolWorker-3: 40, SpawnPoolWorker-4: 40, SpawnPoolWorker-6: 40
+
+Completed: 248/300 games (82.7%)
+Average moves per game: 32.0
+Outcomes - Win: 126, Loss: 99, Draw: 23
+Worker progress: SpawnPoolWorker-2: 40, SpawnPoolWorker-5: 48, SpawnPoolWorker-1: 40, SpawnPoolWorker-3: 40, SpawnPoolWorker-4: 40, SpawnPoolWorker-6: 40
+
+Completed: 272/300 games (90.7%)
+Average moves per game: 32.0
+Outcomes - Win: 136, Loss: 112, Draw: 24
+Worker progress: SpawnPoolWorker-2: 40, SpawnPoolWorker-5: 48, SpawnPoolWorker-1: 48, SpawnPoolWorker-3: 48, SpawnPoolWorker-4: 40, SpawnPoolWorker-6: 48
+
+Completed: 300/300 games (100.0%)
+Average moves per game: 32.0
+Outcomes - Win: 154, Loss: 120, Draw: 26
+Worker progress: SpawnPoolWorker-2: 48, SpawnPoolWorker-5: 56, SpawnPoolWorker-1: 52, SpawnPoolWorker-3: 48, SpawnPoolWorker-4: 48, SpawnPoolWorker-6: 48
+Generated 67102 examples from self-play
+Training phase...
+Policy Loss: 1.6884, Value Loss: 0.8503, Total Loss: 2.7127
+Iteration completed in 186.87 seconds
+Saved checkpoint: ./models/checkpoint_5.pt
+Starting iteration 1/2
+Self-play phase...
+Starting 6 worker processes for 300 games
+Self-play progress:   0%|          | 0/300 [00:00<?, ?it/s]Self-play progress:   3%|▎         | 8/300 [00:32<19:28,  4.00s/it]Self-play progress:   3%|▎         | 8/300 [00:32<19:28,  4.00s/it, games=8/300, avg_moves=31.9, W/L/D=5/3/0]Self-play progress:   5%|▌         | 16/300 [00:32<07:59,  1.69s/it, games=8/300, avg_moves=31.9, W/L/D=5/3/0]Self-play progress:   5%|▌         | 16/300 [00:32<07:59,  1.69s/it, games=16/300, avg_moves=31.9, W/L/D=4/3/1]Self-play progress:   8%|▊         | 24/300 [00:32<07:46,  1.69s/it, games=24/300, avg_moves=32.0, W/L/D=4/3/1]Self-play progress:  11%|█         | 32/300 [00:32<07:32,  1.69s/it, games=32/300, avg_moves=31.6, W/L/D=7/1/0]Self-play progress:  13%|█▎        | 40/300 [00:32<02:06,  2.06it/s, games=32/300, avg_moves=31.6, W/L/D=7/1/0]Self-play progress:  13%|█▎        | 40/300 [00:32<02:06,  2.06it/s, games=40/300, avg_moves=32.0, W/L/D=3/5/0]Self-play progress:  16%|█▌        | 48/300 [00:33<02:02,  2.06it/s, games=48/300, avg_moves=32.0, W/L/D=3/5/0]Self-play progress:  16%|█▌        | 48/300 [00:43<02:02,  2.06it/s, games=48/300, avg_moves=32.0, W/L/D=3/5/0]Self-play progress:  19%|█▊        | 56/300 [01:01<04:08,  1.02s/it, games=48/300, avg_moves=32.0, W/L/D=3/5/0]Self-play progress:  19%|█▊        | 56/300 [01:01<04:08,  1.02s/it, games=56/300, avg_moves=32.0, W/L/D=5/3/0]Self-play progress:  21%|██▏       | 64/300 [01:02<03:10,  1.24it/s, games=56/300, avg_moves=32.0, W/L/D=5/3/0]Self-play progress:  21%|██▏       | 64/300 [01:02<03:10,  1.24it/s, games=64/300, avg_moves=32.0, W/L/D=2/6/0]Self-play progress:  24%|██▍       | 72/300 [01:02<02:20,  1.62it/s, games=64/300, avg_moves=32.0, W/L/D=2/6/0]Self-play progress:  24%|██▍       | 72/300 [01:02<02:20,  1.62it/s, games=72/300, avg_moves=32.0, W/L/D=5/2/1]Self-play progress:  27%|██▋       | 80/300 [01:02<02:15,  1.62it/s, games=80/300, avg_moves=32.0, W/L/D=3/4/1]Self-play progress:  29%|██▉       | 88/300 [01:02<02:10,  1.62it/s, games=88/300, avg_moves=32.0, W/L/D=5/2/1]Self-play progress:  32%|███▏      | 96/300 [01:02<01:04,  3.18it/s, games=88/300, avg_moves=32.0, W/L/D=5/2/1]Self-play progress:  32%|███▏      | 96/300 [01:02<01:04,  3.18it/s, games=96/300, avg_moves=32.0, W/L/D=5/3/0]Self-play progress:  32%|███▏      | 96/300 [01:13<01:04,  3.18it/s, games=96/300, avg_moves=32.0, W/L/D=5/3/0]Self-play progress:  35%|███▍      | 104/300 [01:33<03:14,  1.01it/s, games=96/300, avg_moves=32.0, W/L/D=5/3/0]Self-play progress:  35%|███▍      | 104/300 [01:33<03:14,  1.01it/s, games=104/300, avg_moves=32.0, W/L/D=5/3/0]Self-play progress:  37%|███▋      | 112/300 [01:33<02:26,  1.28it/s, games=104/300, avg_moves=32.0, W/L/D=5/3/0]Self-play progress:  37%|███▋      | 112/300 [01:33<02:26,  1.28it/s, games=112/300, avg_moves=32.0, W/L/D=5/2/1]Self-play progress:  40%|████      | 120/300 [01:33<01:49,  1.64it/s, games=112/300, avg_moves=32.0, W/L/D=5/2/1]Self-play progress:  40%|████      | 120/300 [01:33<01:49,  1.64it/s, games=120/300, avg_moves=32.0, W/L/D=4/3/1]Self-play progress:  43%|████▎     | 128/300 [01:33<01:44,  1.64it/s, games=128/300, avg_moves=31.9, W/L/D=3/4/1]Self-play progress:  45%|████▌     | 136/300 [01:34<01:00,  2.70it/s, games=128/300, avg_moves=31.9, W/L/D=3/4/1]Self-play progress:  45%|████▌     | 136/300 [01:34<01:00,  2.70it/s, games=136/300, avg_moves=32.0, W/L/D=4/4/0]Self-play progress:  48%|████▊     | 144/300 [01:35<00:49,  3.17it/s, games=136/300, avg_moves=32.0, W/L/D=4/4/0]Self-play progress:  48%|████▊     | 144/300 [01:35<00:49,  3.17it/s, games=144/300, avg_moves=32.0, W/L/D=4/4/0]Self-play progress:  48%|████▊     | 144/300 [01:53<00:49,  3.17it/s, games=144/300, avg_moves=32.0, W/L/D=4/4/0]Self-play progress:  51%|█████     | 152/300 [02:04<02:45,  1.12s/it, games=144/300, avg_moves=32.0, W/L/D=4/4/0]Self-play progress:  51%|█████     | 152/300 [02:04<02:45,  1.12s/it, games=152/300, avg_moves=32.0, W/L/D=3/4/1]Self-play progress:  53%|█████▎    | 160/300 [02:04<01:56,  1.20it/s, games=152/300, avg_moves=32.0, W/L/D=3/4/1]Self-play progress:  53%|█████▎    | 160/300 [02:04<01:56,  1.20it/s, games=160/300, avg_moves=32.0, W/L/D=3/5/0]Self-play progress:  56%|█████▌    | 168/300 [02:04<01:22,  1.59it/s, games=160/300, avg_moves=32.0, W/L/D=3/5/0]Self-play progress:  56%|█████▌    | 168/300 [02:04<01:22,  1.59it/s, games=168/300, avg_moves=32.0, W/L/D=4/4/0]Self-play progress:  59%|█████▊    | 176/300 [02:05<00:58,  2.13it/s, games=168/300, avg_moves=32.0, W/L/D=4/4/0]Self-play progress:  59%|█████▊    | 176/300 [02:05<00:58,  2.13it/s, games=176/300, avg_moves=32.0, W/L/D=3/5/0]Self-play progress:  61%|██████▏   | 184/300 [02:05<00:40,  2.83it/s, games=176/300, avg_moves=32.0, W/L/D=3/5/0]Self-play progress:  61%|██████▏   | 184/300 [02:05<00:40,  2.83it/s, games=184/300, avg_moves=32.0, W/L/D=4/3/1]Self-play progress:  64%|██████▍   | 192/300 [02:06<00:31,  3.47it/s, games=184/300, avg_moves=32.0, W/L/D=4/3/1]Self-play progress:  64%|██████▍   | 192/300 [02:06<00:31,  3.47it/s, games=192/300, avg_moves=32.0, W/L/D=4/3/1]Self-play progress:  64%|██████▍   | 192/300 [02:23<00:31,  3.47it/s, games=192/300, avg_moves=32.0, W/L/D=4/3/1]Self-play progress:  67%|██████▋   | 200/300 [02:34<02:00,  1.21s/it, games=192/300, avg_moves=32.0, W/L/D=4/3/1]Self-play progress:  67%|██████▋   | 200/300 [02:34<02:00,  1.21s/it, games=200/300, avg_moves=31.8, W/L/D=4/4/0]Self-play progress:  69%|██████▉   | 208/300 [02:34<01:50,  1.21s/it, games=208/300, avg_moves=32.0, W/L/D=5/3/0]Self-play progress:  72%|███████▏  | 216/300 [02:34<00:56,  1.50it/s, games=208/300, avg_moves=32.0, W/L/D=5/3/0]Self-play progress:  72%|███████▏  | 216/300 [02:34<00:56,  1.50it/s, games=216/300, avg_moves=32.0, W/L/D=2/6/0]Self-play progress:  75%|███████▍  | 224/300 [02:35<00:40,  1.89it/s, games=216/300, avg_moves=32.0, W/L/D=2/6/0]Self-play progress:  75%|███████▍  | 224/300 [02:35<00:40,  1.89it/s, games=224/300, avg_moves=32.0, W/L/D=5/3/0]Self-play progress:  77%|███████▋  | 232/300 [02:36<00:28,  2.38it/s, games=224/300, avg_moves=32.0, W/L/D=5/3/0]Self-play progress:  77%|███████▋  | 232/300 [02:36<00:28,  2.38it/s, games=232/300, avg_moves=32.0, W/L/D=2/3/3]Self-play progress:  80%|████████  | 240/300 [02:37<00:20,  2.91it/s, games=232/300, avg_moves=32.0, W/L/D=2/3/3]Self-play progress:  80%|████████  | 240/300 [02:37<00:20,  2.91it/s, games=240/300, avg_moves=32.0, W/L/D=4/2/2]Self-play progress:  80%|████████  | 240/300 [02:53<00:20,  2.91it/s, games=240/300, avg_moves=32.0, W/L/D=4/2/2]Self-play progress:  83%|████████▎ | 248/300 [03:03<00:59,  1.15s/it, games=240/300, avg_moves=32.0, W/L/D=4/2/2]Self-play progress:  83%|████████▎ | 248/300 [03:03<00:59,  1.15s/it, games=248/300, avg_moves=32.0, W/L/D=6/2/0]Self-play progress:  85%|████████▌ | 256/300 [03:03<00:36,  1.20it/s, games=248/300, avg_moves=32.0, W/L/D=6/2/0]Self-play progress:  85%|████████▌ | 256/300 [03:03<00:36,  1.20it/s, games=256/300, avg_moves=32.0, W/L/D=5/3/0]Self-play progress:  88%|████████▊ | 264/300 [03:03<00:29,  1.20it/s, games=264/300, avg_moves=32.0, W/L/D=4/4/0]Self-play progress:  91%|█████████ | 272/300 [03:04<00:13,  2.09it/s, games=264/300, avg_moves=32.0, W/L/D=4/4/0]Self-play progress:  91%|█████████ | 272/300 [03:04<00:13,  2.09it/s, games=272/300, avg_moves=32.0, W/L/D=1/7/0]Self-play progress:  93%|█████████▎| 280/300 [03:05<00:07,  2.52it/s, games=272/300, avg_moves=32.0, W/L/D=1/7/0]Self-play progress:  93%|█████████▎| 280/300 [03:05<00:07,  2.52it/s, games=280/300, avg_moves=32.0, W/L/D=6/1/1]Self-play progress:  96%|█████████▌| 288/300 [03:05<00:03,  3.19it/s, games=280/300, avg_moves=32.0, W/L/D=6/1/1]Self-play progress:  96%|█████████▌| 288/300 [03:05<00:03,  3.19it/s, games=288/300, avg_moves=32.0, W/L/D=6/2/0]Self-play progress:  97%|█████████▋| 292/300 [03:13<00:04,  1.83it/s, games=288/300, avg_moves=32.0, W/L/D=6/2/0]Self-play progress:  97%|█████████▋| 292/300 [03:13<00:04,  1.83it/s, games=292/300, avg_moves=32.0, W/L/D=1/3/0]Self-play progress: 100%|██████████| 300/300 [03:20<00:00,  1.49it/s, games=292/300, avg_moves=32.0, W/L/D=1/3/0]Self-play progress: 100%|██████████| 300/300 [03:20<00:00,  1.49it/s, games=300/300, avg_moves=32.0, W/L/D=4/4/0]Self-play progress: 100%|██████████| 300/300 [03:20<00:00,  1.49it/s, games=300/300, avg_moves=32.0, W/L/D=4/4/0]
+
+Completed: 8/300 games (2.7%)
+Average moves per game: 31.9
+Outcomes - Win: 5, Loss: 3, Draw: 0
+Worker progress: SpawnPoolWorker-10: 8
+
+Completed: 32/300 games (10.7%)
+Average moves per game: 31.8
+Outcomes - Win: 20, Loss: 10, Draw: 2
+Worker progress: SpawnPoolWorker-10: 8, SpawnPoolWorker-11: 8, SpawnPoolWorker-8: 8, SpawnPoolWorker-7: 8
+
+Completed: 64/300 games (21.3%)
+Average moves per game: 31.9
+Outcomes - Win: 33, Loss: 29, Draw: 2
+Worker progress: SpawnPoolWorker-10: 16, SpawnPoolWorker-11: 8, SpawnPoolWorker-8: 8, SpawnPoolWorker-7: 8, SpawnPoolWorker-9: 16, SpawnPoolWorker-12: 8
+
+Completed: 96/300 games (32.0%)
+Average moves per game: 31.9
+Outcomes - Win: 51, Loss: 40, Draw: 5
+Worker progress: SpawnPoolWorker-10: 16, SpawnPoolWorker-11: 16, SpawnPoolWorker-8: 16, SpawnPoolWorker-7: 16, SpawnPoolWorker-9: 16, SpawnPoolWorker-12: 16
+
+Completed: 120/300 games (40.0%)
+Average moves per game: 32.0
+Outcomes - Win: 65, Loss: 48, Draw: 7
+Worker progress: SpawnPoolWorker-10: 24, SpawnPoolWorker-11: 16, SpawnPoolWorker-8: 16, SpawnPoolWorker-7: 16, SpawnPoolWorker-9: 24, SpawnPoolWorker-12: 24
+
+Completed: 128/300 games (42.7%)
+Average moves per game: 32.0
+Outcomes - Win: 68, Loss: 52, Draw: 8
+Worker progress: SpawnPoolWorker-10: 24, SpawnPoolWorker-11: 16, SpawnPoolWorker-8: 24, SpawnPoolWorker-7: 16, SpawnPoolWorker-9: 24, SpawnPoolWorker-12: 24
+
+Completed: 152/300 games (50.7%)
+Average moves per game: 32.0
+Outcomes - Win: 79, Loss: 64, Draw: 9
+Worker progress: SpawnPoolWorker-10: 32, SpawnPoolWorker-11: 24, SpawnPoolWorker-8: 24, SpawnPoolWorker-7: 24, SpawnPoolWorker-9: 24, SpawnPoolWorker-12: 24
+
+Completed: 184/300 games (61.3%)
+Average moves per game: 32.0
+Outcomes - Win: 93, Loss: 81, Draw: 10
+Worker progress: SpawnPoolWorker-10: 32, SpawnPoolWorker-11: 24, SpawnPoolWorker-8: 32, SpawnPoolWorker-7: 32, SpawnPoolWorker-9: 32, SpawnPoolWorker-12: 32
+
+Completed: 216/300 games (72.0%)
+Average moves per game: 32.0
+Outcomes - Win: 108, Loss: 97, Draw: 11
+Worker progress: SpawnPoolWorker-10: 40, SpawnPoolWorker-11: 32, SpawnPoolWorker-8: 32, SpawnPoolWorker-7: 32, SpawnPoolWorker-9: 40, SpawnPoolWorker-12: 40
+
+Completed: 240/300 games (80.0%)
+Average moves per game: 32.0
+Outcomes - Win: 119, Loss: 105, Draw: 16
+Worker progress: SpawnPoolWorker-10: 40, SpawnPoolWorker-11: 40, SpawnPoolWorker-8: 40, SpawnPoolWorker-7: 40, SpawnPoolWorker-9: 40, SpawnPoolWorker-12: 40
+
+Completed: 248/300 games (82.7%)
+Average moves per game: 32.0
+Outcomes - Win: 125, Loss: 107, Draw: 16
+Worker progress: SpawnPoolWorker-10: 40, SpawnPoolWorker-11: 40, SpawnPoolWorker-8: 40, SpawnPoolWorker-7: 40, SpawnPoolWorker-9: 40, SpawnPoolWorker-12: 48
+
+Completed: 272/300 games (90.7%)
+Average moves per game: 32.0
+Outcomes - Win: 135, Loss: 121, Draw: 16
+Worker progress: SpawnPoolWorker-10: 48, SpawnPoolWorker-11: 40, SpawnPoolWorker-8: 48, SpawnPoolWorker-7: 40, SpawnPoolWorker-9: 48, SpawnPoolWorker-12: 48
+
+Completed: 300/300 games (100.0%)
+Average moves per game: 32.0
+Outcomes - Win: 152, Loss: 131, Draw: 17
+Worker progress: SpawnPoolWorker-10: 52, SpawnPoolWorker-11: 48, SpawnPoolWorker-8: 48, SpawnPoolWorker-7: 48, SpawnPoolWorker-9: 48, SpawnPoolWorker-12: 56
+Generated 67144 examples from self-play
+Training phase...
+Policy Loss: 1.6625, Value Loss: 0.8632, Total Loss: 2.6987
+Iteration completed in 201.69 seconds
+Saved checkpoint: ./models/checkpoint_6.pt
+Starting iteration 2/2
+Self-play phase...
+Starting 6 worker processes for 300 games
+Self-play progress:   0%|          | 0/300 [00:00<?, ?it/s]Self-play progress:   3%|▎         | 8/300 [00:29<18:14,  3.75s/it]Self-play progress:   3%|▎         | 8/300 [00:29<18:14,  3.75s/it, games=8/300, avg_moves=32.0, W/L/D=5/3/0]Self-play progress:   5%|▌         | 16/300 [00:30<07:23,  1.56s/it, games=8/300, avg_moves=32.0, W/L/D=5/3/0]Self-play progress:   5%|▌         | 16/300 [00:30<07:23,  1.56s/it, games=16/300, avg_moves=32.0, W/L/D=2/5/1]Self-play progress:   8%|▊         | 24/300 [00:30<03:55,  1.17it/s, games=16/300, avg_moves=32.0, W/L/D=2/5/1]Self-play progress:   8%|▊         | 24/300 [00:30<03:55,  1.17it/s, games=24/300, avg_moves=32.0, W/L/D=3/5/0]Self-play progress:  11%|█         | 32/300 [00:30<03:48,  1.17it/s, games=32/300, avg_moves=32.0, W/L/D=3/4/1]Self-play progress:  13%|█▎        | 40/300 [00:30<01:37,  2.67it/s, games=32/300, avg_moves=32.0, W/L/D=3/4/1]Self-play progress:  13%|█▎        | 40/300 [00:30<01:37,  2.67it/s, games=40/300, avg_moves=32.0, W/L/D=3/5/0]Self-play progress:  16%|█▌        | 48/300 [00:30<01:34,  2.67it/s, games=48/300, avg_moves=32.0, W/L/D=1/5/2]Self-play progress:  16%|█▌        | 48/300 [00:41<01:34,  2.67it/s, games=48/300, avg_moves=32.0, W/L/D=1/5/2]Self-play progress:  19%|█▊        | 56/300 [00:58<04:01,  1.01it/s, games=48/300, avg_moves=32.0, W/L/D=1/5/2]Self-play progress:  19%|█▊        | 56/300 [00:58<04:01,  1.01it/s, games=56/300, avg_moves=31.8, W/L/D=6/2/0]Self-play progress:  21%|██▏       | 64/300 [00:58<02:59,  1.31it/s, games=56/300, avg_moves=31.8, W/L/D=6/2/0]Self-play progress:  21%|██▏       | 64/300 [00:58<02:59,  1.31it/s, games=64/300, avg_moves=32.0, W/L/D=5/3/0]Self-play progress:  24%|██▍       | 72/300 [00:58<02:53,  1.31it/s, games=72/300, avg_moves=32.0, W/L/D=4/3/1]Self-play progress:  27%|██▋       | 80/300 [00:58<02:47,  1.31it/s, games=80/300, avg_moves=32.0, W/L/D=2/5/1]Self-play progress:  29%|██▉       | 88/300 [00:59<01:20,  2.64it/s, games=80/300, avg_moves=32.0, W/L/D=2/5/1]Self-play progress:  29%|██▉       | 88/300 [00:59<01:20,  2.64it/s, games=88/300, avg_moves=32.0, W/L/D=4/3/1]Self-play progress:  32%|███▏      | 96/300 [00:59<01:04,  3.14it/s, games=88/300, avg_moves=32.0, W/L/D=4/3/1]Self-play progress:  32%|███▏      | 96/300 [00:59<01:04,  3.14it/s, games=96/300, avg_moves=32.0, W/L/D=3/5/0]Self-play progress:  32%|███▏      | 96/300 [01:11<01:04,  3.14it/s, games=96/300, avg_moves=32.0, W/L/D=3/5/0]Self-play progress:  35%|███▍      | 104/300 [01:27<03:20,  1.02s/it, games=96/300, avg_moves=32.0, W/L/D=3/5/0]Self-play progress:  35%|███▍      | 104/300 [01:27<03:20,  1.02s/it, games=104/300, avg_moves=32.0, W/L/D=4/3/1]Self-play progress:  37%|███▋      | 112/300 [01:28<02:27,  1.28it/s, games=104/300, avg_moves=32.0, W/L/D=4/3/1]Self-play progress:  37%|███▋      | 112/300 [01:28<02:27,  1.28it/s, games=112/300, avg_moves=32.0, W/L/D=5/3/0]Self-play progress:  40%|████      | 120/300 [01:28<02:21,  1.28it/s, games=120/300, avg_moves=31.9, W/L/D=3/5/0]Self-play progress:  43%|████▎     | 128/300 [01:28<01:21,  2.11it/s, games=120/300, avg_moves=31.9, W/L/D=3/5/0]Self-play progress:  43%|████▎     | 128/300 [01:28<01:21,  2.11it/s, games=128/300, avg_moves=32.0, W/L/D=3/5/0]Self-play progress:  45%|████▌     | 136/300 [01:28<01:00,  2.70it/s, games=128/300, avg_moves=32.0, W/L/D=3/5/0]Self-play progress:  45%|████▌     | 136/300 [01:28<01:00,  2.70it/s, games=136/300, avg_moves=31.9, W/L/D=3/5/0]Self-play progress:  48%|████▊     | 144/300 [01:29<00:48,  3.23it/s, games=136/300, avg_moves=31.9, W/L/D=3/5/0]Self-play progress:  48%|████▊     | 144/300 [01:29<00:48,  3.23it/s, games=144/300, avg_moves=31.9, W/L/D=5/2/1]Self-play progress:  48%|████▊     | 144/300 [01:41<00:48,  3.23it/s, games=144/300, avg_moves=31.9, W/L/D=5/2/1]Self-play progress:  51%|█████     | 152/300 [01:57<02:46,  1.13s/it, games=144/300, avg_moves=31.9, W/L/D=5/2/1]Self-play progress:  51%|█████     | 152/300 [01:57<02:46,  1.13s/it, games=152/300, avg_moves=32.0, W/L/D=3/4/1]Self-play progress:  53%|█████▎    | 160/300 [01:57<01:55,  1.21it/s, games=152/300, avg_moves=32.0, W/L/D=3/4/1]Self-play progress:  53%|█████▎    | 160/300 [01:57<01:55,  1.21it/s, games=160/300, avg_moves=31.8, W/L/D=3/5/0]Self-play progress:  56%|█████▌    | 168/300 [01:57<01:19,  1.65it/s, games=160/300, avg_moves=31.8, W/L/D=3/5/0]Self-play progress:  56%|█████▌    | 168/300 [01:57<01:19,  1.65it/s, games=168/300, avg_moves=32.0, W/L/D=2/6/0]Self-play progress:  59%|█████▊    | 176/300 [01:57<00:54,  2.29it/s, games=168/300, avg_moves=32.0, W/L/D=2/6/0]Self-play progress:  59%|█████▊    | 176/300 [01:57<00:54,  2.29it/s, games=176/300, avg_moves=31.9, W/L/D=5/3/0]Self-play progress:  61%|██████▏   | 184/300 [01:58<00:37,  3.08it/s, games=176/300, avg_moves=31.9, W/L/D=5/3/0]Self-play progress:  61%|██████▏   | 184/300 [01:58<00:37,  3.08it/s, games=184/300, avg_moves=32.0, W/L/D=3/5/0]Self-play progress:  64%|██████▍   | 192/300 [01:59<00:30,  3.56it/s, games=184/300, avg_moves=32.0, W/L/D=3/5/0]Self-play progress:  64%|██████▍   | 192/300 [01:59<00:30,  3.56it/s, games=192/300, avg_moves=31.9, W/L/D=5/3/0]Self-play progress:  64%|██████▍   | 192/300 [02:11<00:30,  3.56it/s, games=192/300, avg_moves=31.9, W/L/D=5/3/0]Self-play progress:  67%|██████▋   | 200/300 [02:24<01:52,  1.12s/it, games=192/300, avg_moves=31.9, W/L/D=5/3/0]Self-play progress:  67%|██████▋   | 200/300 [02:24<01:52,  1.12s/it, games=200/300, avg_moves=29.1, W/L/D=2/5/1]Self-play progress:  69%|██████▉   | 208/300 [02:26<01:17,  1.19it/s, games=200/300, avg_moves=29.1, W/L/D=2/5/1]Self-play progress:  69%|██████▉   | 208/300 [02:26<01:17,  1.19it/s, games=208/300, avg_moves=32.0, W/L/D=5/2/1]Self-play progress:  72%|███████▏  | 216/300 [02:26<00:51,  1.62it/s, games=208/300, avg_moves=32.0, W/L/D=5/2/1]Self-play progress:  72%|███████▏  | 216/300 [02:26<00:51,  1.62it/s, games=216/300, avg_moves=31.9, W/L/D=5/3/0]Self-play progress:  75%|███████▍  | 224/300 [02:27<00:33,  2.25it/s, games=216/300, avg_moves=31.9, W/L/D=5/3/0]Self-play progress:  75%|███████▍  | 224/300 [02:27<00:33,  2.25it/s, games=224/300, avg_moves=32.0, W/L/D=4/4/0]Self-play progress:  77%|███████▋  | 232/300 [02:27<00:30,  2.25it/s, games=232/300, avg_moves=31.9, W/L/D=3/4/1]Self-play progress:  80%|████████  | 240/300 [02:28<00:17,  3.42it/s, games=232/300, avg_moves=31.9, W/L/D=3/4/1]Self-play progress:  80%|████████  | 240/300 [02:28<00:17,  3.42it/s, games=240/300, avg_moves=32.0, W/L/D=3/5/0]Self-play progress:  80%|████████  | 240/300 [02:41<00:17,  3.42it/s, games=240/300, avg_moves=32.0, W/L/D=3/5/0]Self-play progress:  83%|████████▎ | 248/300 [02:54<00:52,  1.00s/it, games=240/300, avg_moves=32.0, W/L/D=3/5/0]Self-play progress:  83%|████████▎ | 248/300 [02:54<00:52,  1.00s/it, games=248/300, avg_moves=32.0, W/L/D=3/5/0]Self-play progress:  85%|████████▌ | 256/300 [02:54<00:33,  1.32it/s, games=248/300, avg_moves=32.0, W/L/D=3/5/0]Self-play progress:  85%|████████▌ | 256/300 [02:54<00:33,  1.32it/s, games=256/300, avg_moves=32.0, W/L/D=6/0/2]Self-play progress:  88%|████████▊ | 264/300 [02:55<00:21,  1.68it/s, games=256/300, avg_moves=32.0, W/L/D=6/0/2]Self-play progress:  88%|████████▊ | 264/300 [02:55<00:21,  1.68it/s, games=264/300, avg_moves=32.0, W/L/D=2/6/0]Self-play progress:  91%|█████████ | 272/300 [02:56<00:12,  2.25it/s, games=264/300, avg_moves=32.0, W/L/D=2/6/0]Self-play progress:  91%|█████████ | 272/300 [02:56<00:12,  2.25it/s, games=272/300, avg_moves=32.0, W/L/D=2/6/0]Self-play progress:  93%|█████████▎| 280/300 [02:56<00:06,  3.06it/s, games=272/300, avg_moves=32.0, W/L/D=2/6/0]Self-play progress:  93%|█████████▎| 280/300 [02:56<00:06,  3.06it/s, games=280/300, avg_moves=32.0, W/L/D=5/2/1]Self-play progress:  96%|█████████▌| 288/300 [02:58<00:03,  3.56it/s, games=280/300, avg_moves=32.0, W/L/D=5/2/1]Self-play progress:  96%|█████████▌| 288/300 [02:58<00:03,  3.56it/s, games=288/300, avg_moves=31.9, W/L/D=3/5/0]Self-play progress:  97%|█████████▋| 292/300 [03:04<00:04,  1.97it/s, games=288/300, avg_moves=31.9, W/L/D=3/5/0]Self-play progress:  97%|█████████▋| 292/300 [03:04<00:04,  1.97it/s, games=292/300, avg_moves=32.0, W/L/D=1/2/1]Self-play progress: 100%|██████████| 300/300 [03:12<00:00,  1.50it/s, games=292/300, avg_moves=32.0, W/L/D=1/2/1]Self-play progress: 100%|██████████| 300/300 [03:12<00:00,  1.50it/s, games=300/300, avg_moves=32.0, W/L/D=5/3/0]Self-play progress: 100%|██████████| 300/300 [03:12<00:00,  1.56it/s, games=300/300, avg_moves=32.0, W/L/D=5/3/0]
+
+Completed: 8/300 games (2.7%)
+Average moves per game: 32.0
+Outcomes - Win: 5, Loss: 3, Draw: 0
+Worker progress: SpawnPoolWorker-15: 8
+
+Completed: 32/300 games (10.7%)
+Average moves per game: 32.0
+Outcomes - Win: 13, Loss: 17, Draw: 2
+Worker progress: SpawnPoolWorker-15: 8, SpawnPoolWorker-14: 8, SpawnPoolWorker-18: 8, SpawnPoolWorker-16: 8
+
+Completed: 64/300 games (21.3%)
+Average moves per game: 32.0
+Outcomes - Win: 28, Loss: 32, Draw: 4
+Worker progress: SpawnPoolWorker-15: 16, SpawnPoolWorker-14: 8, SpawnPoolWorker-18: 8, SpawnPoolWorker-16: 16, SpawnPoolWorker-17: 8, SpawnPoolWorker-13: 8
+
+Completed: 96/300 games (32.0%)
+Average moves per game: 32.0
+Outcomes - Win: 41, Loss: 48, Draw: 7
+Worker progress: SpawnPoolWorker-15: 16, SpawnPoolWorker-14: 16, SpawnPoolWorker-18: 16, SpawnPoolWorker-16: 16, SpawnPoolWorker-17: 16, SpawnPoolWorker-13: 16
+
+Completed: 120/300 games (40.0%)
+Average moves per game: 32.0
+Outcomes - Win: 53, Loss: 59, Draw: 8
+Worker progress: SpawnPoolWorker-15: 24, SpawnPoolWorker-14: 16, SpawnPoolWorker-18: 24, SpawnPoolWorker-16: 24, SpawnPoolWorker-17: 16, SpawnPoolWorker-13: 16
+
+Completed: 128/300 games (42.7%)
+Average moves per game: 32.0
+Outcomes - Win: 56, Loss: 64, Draw: 8
+Worker progress: SpawnPoolWorker-15: 24, SpawnPoolWorker-14: 16, SpawnPoolWorker-18: 24, SpawnPoolWorker-16: 24, SpawnPoolWorker-17: 16, SpawnPoolWorker-13: 24
+
+Completed: 152/300 games (50.7%)
+Average moves per game: 32.0
+Outcomes - Win: 67, Loss: 75, Draw: 10
+Worker progress: SpawnPoolWorker-15: 24, SpawnPoolWorker-14: 24, SpawnPoolWorker-18: 32, SpawnPoolWorker-16: 24, SpawnPoolWorker-17: 24, SpawnPoolWorker-13: 24
+
+Completed: 184/300 games (61.3%)
+Average moves per game: 32.0
+Outcomes - Win: 80, Loss: 94, Draw: 10
+Worker progress: SpawnPoolWorker-15: 32, SpawnPoolWorker-14: 32, SpawnPoolWorker-18: 32, SpawnPoolWorker-16: 32, SpawnPoolWorker-17: 24, SpawnPoolWorker-13: 32
+
+Completed: 216/300 games (72.0%)
+Average moves per game: 31.8
+Outcomes - Win: 97, Loss: 107, Draw: 12
+Worker progress: SpawnPoolWorker-15: 32, SpawnPoolWorker-14: 40, SpawnPoolWorker-18: 40, SpawnPoolWorker-16: 32, SpawnPoolWorker-17: 32, SpawnPoolWorker-13: 40
+
+Completed: 240/300 games (80.0%)
+Average moves per game: 31.9
+Outcomes - Win: 107, Loss: 120, Draw: 13
+Worker progress: SpawnPoolWorker-15: 40, SpawnPoolWorker-14: 40, SpawnPoolWorker-18: 40, SpawnPoolWorker-16: 40, SpawnPoolWorker-17: 40, SpawnPoolWorker-13: 40
+
+Completed: 248/300 games (82.7%)
+Average moves per game: 31.9
+Outcomes - Win: 110, Loss: 125, Draw: 13
+Worker progress: SpawnPoolWorker-15: 40, SpawnPoolWorker-14: 48, SpawnPoolWorker-18: 40, SpawnPoolWorker-16: 40, SpawnPoolWorker-17: 40, SpawnPoolWorker-13: 40
+
+Completed: 272/300 games (90.7%)
+Average moves per game: 31.9
+Outcomes - Win: 120, Loss: 137, Draw: 15
+Worker progress: SpawnPoolWorker-15: 40, SpawnPoolWorker-14: 48, SpawnPoolWorker-18: 48, SpawnPoolWorker-16: 48, SpawnPoolWorker-17: 40, SpawnPoolWorker-13: 48
+
+Completed: 300/300 games (100.0%)
+Average moves per game: 31.9
+Outcomes - Win: 134, Loss: 149, Draw: 17
+Worker progress: SpawnPoolWorker-15: 48, SpawnPoolWorker-14: 56, SpawnPoolWorker-18: 52, SpawnPoolWorker-16: 48, SpawnPoolWorker-17: 48, SpawnPoolWorker-13: 48
+Generated 66955 examples from self-play
+Training phase...
+Policy Loss: 1.6824, Value Loss: 0.8413, Total Loss: 2.6956
+Iteration completed in 193.21 seconds
+Saved checkpoint: ./models/checkpoint_7.pt
+Training metrics plotted to: ./logs/metrics_iter_2.png
+Training completed!
