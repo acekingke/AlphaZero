@@ -80,9 +80,12 @@ def _worker_play(seed_and_count):
         game_start_time = time.time()
 
         while not env.board.is_done():
-            state = env.board.get_observation()
+            # Use canonical state for consistency with MCTS
+            canonical_state = env.board.get_canonical_state()
+            # Convert to observation format for neural network (consistent with MCTS)
+            state = mcts._canonical_to_observation(canonical_state, env)
             action_probs = mcts.search(state, env, WORKER_TEMPERATURE, add_noise=True)
-            # Save which player made the move along with state and policy
+            # Save state, the pi (policy) returned by MCTS, and the player who made the move
             game_history.append((state, action_probs, env.board.current_player))
             action = np.random.choice(len(action_probs), p=action_probs)
             _, reward, done, _ = env.step(action)
@@ -102,16 +105,18 @@ def _worker_play(seed_and_count):
         })
 
         for state, policy, player_at_move in game_history:
-            if winner == 0:
-                value = 0
+            # state 已经是 get_observation() 格式，无需转换
+            # 正确计算value标签：获胜者=1，失败者=-1，平局=0
+            if winner == 0:  # 平局
+                value_for_training = 0.0
             else:
-                value = 1 if winner == player_at_move else -1
-            # Add original example
-            results.append((state, policy, value))
+                # 如果当前玩家是获胜者，value=1；否则value=-1
+                value_for_training = 1.0 if winner == player_at_move else -1.0
             
-            # Add symmetrical positions
+            results.append((state, policy, value_for_training))
+            # 数据增强
             for sym_state, sym_policy in get_all_symmetries(state, policy, WORKER_GAME_SIZE):
-                results.append((sym_state, sym_policy, value))
+                results.append((sym_state, sym_policy, value_for_training))
 
     # Return results, task metadata, and game statistics
     return results, seed, count, game_stats, worker_id
@@ -218,7 +223,10 @@ class AlphaZeroTrainer:
 
             # Use fixed temperature throughout the game
             while not env.board.is_done():
-                state = env.board.get_observation()
+                # Use canonical state for consistency with MCTS
+                canonical_state = env.board.get_canonical_state()
+                # Convert to observation format for neural network (consistent with MCTS)
+                state = mcts._canonical_to_observation(canonical_state, env)
                 action_probs = mcts.search(state, env, self.temperature, add_noise=True)
 
                 # Save state, the pi (policy) returned by MCTS, and the player who made the move
@@ -238,20 +246,19 @@ class AlphaZeroTrainer:
             # Get the final result of the game
             winner = env.board.get_winner()
 
-            # Update examples with the outcome
+            # state 已经是 get_observation() 格式，无需转换
+            # 正确计算value标签：获胜者=1，失败者=-1，平局=0
             for state, policy, player_at_move in game_history:
-                if winner == 0:  # Draw
-                    value = 0
+                if winner == 0:  # 平局
+                    value_for_training = 0.0
                 else:
-                    # Value is from the perspective of the player who made the move
-                    value = 1 if winner == player_at_move else -1
-
-                # Add original example
-                examples.append((state, policy, value))
+                    # 如果当前玩家是获胜者，value=1；否则value=-1
+                    value_for_training = 1.0 if winner == player_at_move else -1.0
                 
-                # Add symmetrical positions
+                examples.append((state, policy, value_for_training))
+                # 数据增强
                 for sym_state, sym_policy in get_all_symmetries(state, policy, self.game_size):
-                    examples.append((sym_state, sym_policy, value))
+                    examples.append((sym_state, sym_policy, value_for_training))
 
         return examples
 
