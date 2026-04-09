@@ -20,7 +20,15 @@ from utils.data_augmentation import get_all_symmetries
 
 
 # Helper functions for multiprocessing - must be at module level to be picklable
-def _worker_init(state_dict, game_size, num_mcts_simulations, c_puct, temperature, dirichlet_alpha, dirichlet_weight):
+def _worker_init(
+    state_dict,
+    game_size,
+    num_mcts_simulations,
+    c_puct,
+    temperature,
+    dirichlet_alpha,
+    dirichlet_weight,
+):
     """Worker process initializer that runs once per worker process."""
     import torch
     from models.neural_network import AlphaZeroNetwork
@@ -38,9 +46,9 @@ def _worker_init(state_dict, game_size, num_mcts_simulations, c_puct, temperatur
     global WORKER_DIRICHLET_ALPHA
     global WORKER_DIRICHLET_WEIGHT
 
-    WORKER_MODEL = AlphaZeroNetwork(game_size, device='cpu')
+    WORKER_MODEL = AlphaZeroNetwork(game_size, device="cpu")
     WORKER_MODEL.load_state_dict(state_dict)
-    WORKER_MODEL.to('cpu')
+    WORKER_MODEL.to("cpu")
     WORKER_MODEL.eval()
 
     WORKER_MCTS_CLASS = LocalMCTS
@@ -73,8 +81,18 @@ def _worker_play(seed_and_count):
         env = OthelloEnv(size=WORKER_GAME_SIZE)
         env.reset()
 
-        mcts = WORKER_MCTS_CLASS(WORKER_MODEL, c_puct=WORKER_C_PUCT, num_simulations=WORKER_MCTS_SIMULATIONS,
-                                 dirichlet_alpha=WORKER_DIRICHLET_ALPHA, dirichlet_weight=WORKER_DIRICHLET_WEIGHT)
+        # Randomly switch first player to balance training data
+        if random.random() < 0.5:
+            # Switch to white first by making black pass and white start
+            env.board.current_player = 1  # White goes first
+
+        mcts = WORKER_MCTS_CLASS(
+            WORKER_MODEL,
+            c_puct=WORKER_C_PUCT,
+            num_simulations=WORKER_MCTS_SIMULATIONS,
+            dirichlet_alpha=WORKER_DIRICHLET_ALPHA,
+            dirichlet_weight=WORKER_DIRICHLET_WEIGHT,
+        )
         game_history = []
         step = 0
         game_start_time = time.time()
@@ -98,11 +116,13 @@ def _worker_play(seed_and_count):
         outcome = "Draw" if winner == 0 else "Win" if winner == 1 else "Loss"
 
         # Collect game statistics
-        game_stats.append({
-            "moves": step,
-            "duration": game_duration,
-            "outcome": outcome,
-        })
+        game_stats.append(
+            {
+                "moves": step,
+                "duration": game_duration,
+                "outcome": outcome,
+            }
+        )
 
         for state, policy, player_at_move in game_history:
             # state 已经是 get_observation() 格式，无需转换
@@ -112,10 +132,12 @@ def _worker_play(seed_and_count):
             else:
                 # 如果当前玩家是获胜者，value=1；否则value=-1
                 value_for_training = 1.0 if winner == player_at_move else -1.0
-            
+
             results.append((state, policy, value_for_training))
             # 数据增强
-            for sym_state, sym_policy in get_all_symmetries(state, policy, WORKER_GAME_SIZE):
+            for sym_state, sym_policy in get_all_symmetries(
+                state, policy, WORKER_GAME_SIZE
+            ):
                 results.append((sym_state, sym_policy, value_for_training))
 
     # Return results, task metadata, and game statistics
@@ -130,17 +152,17 @@ class AlphaZeroTrainer:
         game_size=6,
         num_iterations=100,
         num_self_play_games=1000,  # Increased from 200 to 1000 for better training
-        num_mcts_simulations=800,
+        num_mcts_simulations=25,
         temperature=0.8,
         c_puct=2.0,
-        batch_size=128,
-        num_epochs=20,
+        batch_size=64,
+        num_epochs=100,
         lr=0.001,
         l2_regularization=1e-4,  # L2 regularization coefficient (c in paper)
-        checkpoint_path='./models/checkpoint',
+        checkpoint_path="./models/checkpoint",
         use_mps=True,
         use_cuda=True,
-        log_dir='./logs',
+        log_dir="./logs",
         use_multiprocessing=False,
         mp_num_workers=None,
         mp_games_per_worker=1,
@@ -186,7 +208,7 @@ class AlphaZeroTrainer:
         self.total_losses = []
 
         # Initialize training logger
-        self.logger = TrainingLogger(log_dir=log_dir, model_name='alphazero')
+        self.logger = TrainingLogger(log_dir=log_dir, model_name="alphazero")
 
         # Multiprocessing options for self-play
         self.use_multiprocessing = use_multiprocessing
@@ -207,9 +229,14 @@ class AlphaZeroTrainer:
         examples = []
 
         # Default: serial execution (existing behavior)
-        for _ in tqdm(range(self.num_self_play_games), desc="Self-Play Games"):
+        for game_idx in tqdm(range(self.num_self_play_games), desc="Self-Play Games"):
             env = OthelloEnv(size=self.game_size)
             env.reset()
+
+            # Randomly switch first player to balance training data
+            if np.random.random() < 0.5:
+                # Switch to white first
+                env.board.current_player = 1  # White goes first
 
             mcts = MCTS(
                 self.model,
@@ -254,10 +281,12 @@ class AlphaZeroTrainer:
                 else:
                     # 如果当前玩家是获胜者，value=1；否则value=-1
                     value_for_training = 1.0 if winner == player_at_move else -1.0
-                
+
                 examples.append((state, policy, value_for_training))
                 # 数据增强
-                for sym_state, sym_policy in get_all_symmetries(state, policy, self.game_size):
+                for sym_state, sym_policy in get_all_symmetries(
+                    state, policy, self.game_size
+                ):
                     examples.append((sym_state, sym_policy, value_for_training))
 
         return examples
@@ -294,7 +323,7 @@ class AlphaZeroTrainer:
             tasks.append((seed_base + i, count))
 
         # Use spawn to be safe across platforms
-        ctx = mp.get_context('spawn')
+        ctx = mp.get_context("spawn")
         examples = []
 
         # Display progress info
@@ -319,13 +348,15 @@ class AlphaZeroTrainer:
             ),
         ) as pool:
             # Create main progress bar
-            with tqdm(total=total_games, desc='Self-play progress') as main_pbar:
+            with tqdm(total=total_games, desc="Self-play progress") as main_pbar:
                 # Create progress dictionary for workers
                 worker_pbars = {}
 
                 for result_tuple in pool.imap_unordered(_worker_play, tasks):
                     # Unpack returned tuple: (examples, seed, count, game_stats, worker_id)
-                    examples_batch, task_seed, task_count, game_stats, worker_id = result_tuple
+                    examples_batch, task_seed, task_count, game_stats, worker_id = (
+                        result_tuple
+                    )
 
                     # Update progress tracking
                     examples.extend(examples_batch)
@@ -339,32 +370,42 @@ class AlphaZeroTrainer:
                     worker_progress[worker_id] += task_count
 
                     # Calculate statistics
-                    avg_moves = sum(g['moves'] for g in game_stats) / len(game_stats) if game_stats else 0
-                    avg_duration = sum(g['duration'] for g in game_stats) / len(game_stats) if game_stats else 0
-                    outcomes = {'Win': 0, 'Loss': 0, 'Draw': 0}
+                    avg_moves = (
+                        sum(g["moves"] for g in game_stats) / len(game_stats)
+                        if game_stats
+                        else 0
+                    )
+                    avg_duration = (
+                        sum(g["duration"] for g in game_stats) / len(game_stats)
+                        if game_stats
+                        else 0
+                    )
+                    outcomes = {"Win": 0, "Loss": 0, "Draw": 0}
                     for g in game_stats:
-                        outcomes[g['outcome']] += 1
+                        outcomes[g["outcome"]] += 1
 
                     # Update main progress bar postfix with statistics
                     main_pbar.set_postfix(
                         {
-                            'games': f"{completed_games}/{total_games}",
-                            'avg_moves': f"{avg_moves:.1f}",
-                            'W/L/D': f"{outcomes['Win']}/{outcomes['Loss']}/{outcomes['Draw']}",
+                            "games": f"{completed_games}/{total_games}",
+                            "avg_moves": f"{avg_moves:.1f}",
+                            "W/L/D": f"{outcomes['Win']}/{outcomes['Loss']}/{outcomes['Draw']}",
                         }
                     )
 
                     # Show detailed progress information every ~10% completion or for each worker update
                     if completed_games % max(1, total_games // 10) <= task_count:
                         # Calculate overall statistics
-                        total_moves = sum(g['moves'] for g in all_game_stats)
-                        overall_avg_moves = total_moves / len(all_game_stats) if all_game_stats else 0
-                        total_outcomes = {'Win': 0, 'Loss': 0, 'Draw': 0}
+                        total_moves = sum(g["moves"] for g in all_game_stats)
+                        overall_avg_moves = (
+                            total_moves / len(all_game_stats) if all_game_stats else 0
+                        )
+                        total_outcomes = {"Win": 0, "Loss": 0, "Draw": 0}
                         for g in all_game_stats:
-                            total_outcomes[g['outcome']] += 1
+                            total_outcomes[g["outcome"]] += 1
 
                         print(
-                            f"\nCompleted: {completed_games}/{total_games} games ({completed_games/total_games*100:.1f}%)"
+                            f"\nCompleted: {completed_games}/{total_games} games ({completed_games / total_games * 100:.1f}%)"
                         )
                         print(f"Average moves per game: {overall_avg_moves:.1f}")
                         print(
@@ -394,7 +435,9 @@ class AlphaZeroTrainer:
             return 0.0, 0.0, 0.0  # Return zero losses when skipping training
 
         # Extract data
-        mini_batch = random.sample(self.buffer, min(len(self.buffer), self.batch_size * self.num_epochs))
+        mini_batch = random.sample(
+            self.buffer, min(len(self.buffer), self.batch_size * self.num_epochs)
+        )
 
         # Split data
         states, policies, values = zip(*mini_batch)
@@ -420,15 +463,17 @@ class AlphaZeroTrainer:
             policy_logits, value_pred = self.model(batch_states)
 
             # Calculate loss (following AlphaZero paper exactly)
-            policy_loss = -torch.sum(batch_policies * torch.log_softmax(policy_logits, dim=1)) / batch_states.size(0)
+            policy_loss = -torch.sum(
+                batch_policies * torch.log_softmax(policy_logits, dim=1)
+            ) / batch_states.size(0)
             value_loss = nn.MSELoss()(value_pred, batch_values)
-            
+
             # Add L2 regularization term: c||θ||^2
             l2_reg = 0
             for param in self.model.parameters():
                 l2_reg += torch.norm(param) ** 2
             l2_reg = self.l2_regularization * l2_reg
-            
+
             # Complete AlphaZero loss: L = (z-v)^2 - π^T log p + c||θ||^2
             total_loss = value_loss + policy_loss + l2_reg
 
@@ -452,40 +497,39 @@ class AlphaZeroTrainer:
         self.value_losses.append(avg_value_loss)
         self.total_losses.append(avg_total_loss)
 
+        # Switch back to evaluation mode after training
+        self.model.eval()
+
         return avg_policy_loss, avg_value_loss, avg_total_loss
 
     def save_checkpoint(self, iteration):
         """Save model checkpoint."""
-        # Ensure we use an incremental checkpoint number
-        next_checkpoint = iteration
-
-        # Check if checkpoint already exists and increment if needed
-        while os.path.exists(f"{self.checkpoint_path}_{next_checkpoint}.pt"):
-            next_checkpoint += 1
+        # Use iteration number directly as checkpoint number (allow overwrite)
+        checkpoint_number = iteration
 
         # Save checkpoint with current training state
         torch.save(
             {
-                'iteration': iteration,
-                'model_state_dict': self.model.state_dict(),
-                'optimizer_state_dict': self.optimizer.state_dict(),
-                'policy_losses': self.policy_losses,
-                'value_losses': self.value_losses,
-                'total_losses': self.total_losses,
+                "iteration": iteration,
+                "model_state_dict": self.model.state_dict(),
+                "optimizer_state_dict": self.optimizer.state_dict(),
+                "policy_losses": self.policy_losses,
+                "value_losses": self.value_losses,
+                "total_losses": self.total_losses,
             },
-            f"{self.checkpoint_path}_{next_checkpoint}.pt",
+            f"{self.checkpoint_path}_{checkpoint_number}.pt",
         )
 
-        print(f"Saved checkpoint: {self.checkpoint_path}_{next_checkpoint}.pt")
+        print(f"Saved checkpoint: {self.checkpoint_path}_{checkpoint_number}.pt")
 
     def load_checkpoint(self, path):
         """Load model checkpoint."""
-        checkpoint = torch.load(path, weights_only=True)
-        self.model.load_state_dict(checkpoint['model_state_dict'])
-        self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        self.policy_losses = checkpoint.get('policy_losses', [])
-        self.value_losses = checkpoint.get('value_losses', [])
-        self.total_losses = checkpoint.get('total_losses', [])
+        checkpoint = torch.load(path)
+        self.model.load_state_dict(checkpoint["model_state_dict"])
+        self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+        self.policy_losses = checkpoint.get("policy_losses", [])
+        self.value_losses = checkpoint.get("value_losses", [])
+        self.total_losses = checkpoint.get("total_losses", [])
 
         # Load existing loss records into logger
         for i, (p_loss, v_loss, t_loss) in enumerate(
@@ -500,7 +544,7 @@ class AlphaZeroTrainer:
                 elapsed_time=0,
             )
 
-        return checkpoint.get('iteration', 0)
+        return checkpoint.get("iteration", 0)
 
     def plot_metrics(self):
         """Plot training metrics."""
@@ -508,24 +552,24 @@ class AlphaZeroTrainer:
 
         plt.subplot(1, 3, 1)
         plt.plot(self.policy_losses)
-        plt.title('Policy Loss')
-        plt.xlabel('Training Iterations')
+        plt.title("Policy Loss")
+        plt.xlabel("Training Iterations")
         plt.grid(True)
 
         plt.subplot(1, 3, 2)
         plt.plot(self.value_losses)
-        plt.title('Value Loss')
-        plt.xlabel('Training Iterations')
+        plt.title("Value Loss")
+        plt.xlabel("Training Iterations")
         plt.grid(True)
 
         plt.subplot(1, 3, 3)
         plt.plot(self.total_losses)
-        plt.title('Total Loss')
-        plt.xlabel('Training Iterations')
+        plt.title("Total Loss")
+        plt.xlabel("Training Iterations")
         plt.grid(True)
 
         plt.tight_layout()
-        plt.savefig('./training_metrics.png')
+        plt.savefig("./training_metrics.png")
         plt.close()
 
     def train(self, resume_from=None):
@@ -539,7 +583,9 @@ class AlphaZeroTrainer:
             print(
                 f"Resuming from iteration {start_iteration}, continuing for {max_iterations} more iterations"
             )
-            print(f"Next iteration: {start_iteration+1}/{start_iteration+max_iterations}")
+            print(
+                f"Next iteration: {start_iteration + 1}/{start_iteration + max_iterations}"
+            )
 
         # Adjust total iterations to ensure we train for the specified number regardless of resuming
         end_iteration = start_iteration + max_iterations
@@ -547,14 +593,15 @@ class AlphaZeroTrainer:
         # Training loop
         for iteration in range(start_iteration, end_iteration):
             iteration_start_time = time.time()
-            print(f"Starting iteration {iteration}/{end_iteration-1}")
+            print(f"Starting iteration {iteration}/{end_iteration - 1}")
 
             # Self-play
             print("Self-play phase...")
             try:
                 if self.use_multiprocessing:
                     examples = self.self_play_multiprocess(
-                        num_workers=self.mp_num_workers, games_per_worker=self.mp_games_per_worker
+                        num_workers=self.mp_num_workers,
+                        games_per_worker=self.mp_games_per_worker,
                     )
                 else:
                     examples = self.self_play()
@@ -567,6 +614,7 @@ class AlphaZeroTrainer:
             except Exception as e:
                 print(f"Error during iteration {iteration}: {e}")
                 import traceback
+
                 traceback.print_exc()
                 print("Skipping to next iteration...")
                 continue
@@ -596,10 +644,12 @@ class AlphaZeroTrainer:
                 self.plot_metrics()
                 curr_iter = start_iteration + iteration
                 metrics_image = self.logger.plot_metrics(
-                    save_path=os.path.join(self.log_dir, f'metrics_iter_{curr_iter}.png')
+                    save_path=os.path.join(
+                        self.log_dir, f"metrics_iter_{curr_iter}.png"
+                    )
                 )
                 print(f"Training metrics plotted to: {metrics_image}")
 
         print("Training completed!")
         self.plot_metrics()
-        self.logger.plot_metrics(save_path='./training_metrics_final.png')
+        self.logger.plot_metrics(save_path="./training_metrics_final.png")
