@@ -272,7 +272,36 @@ self.scheduler.step()
 
 ## 参考
 
+### 代码参考
+
 - `alpha-zero-general/main.py`: 默认参数配置
 - `alpha-zero-general/Coach.py`: 训练循环、滑动窗口实现
 - `alpha-zero-general/MCTS.py`: 温度策略
 - 本项目当前实现: `train.py`, `main.py`, `mcts/mcts.py`
+
+### 学术论文
+
+#### 滑动窗口 / 经验回放 (Experience Replay)
+
+- **DQN (经验回放的理论基础)**:
+  - Mnih et al., "Playing Atari with Deep Reinforcement Learning", arXiv:1312.5602, 2013
+  - Mnih et al., "Human-level control through deep reinforcement learning", *Nature* 518, 529–533, 2015
+  - 首次提出经验回放缓冲区，用于打破训练样本的时间相关性
+
+- **AlphaGo Zero (将 replay buffer 用于 self-play)**:
+  - Silver et al., "Mastering the game of Go without human knowledge", *Nature* 550, 354–359, 2017
+  - Methods 章节明确使用 "**最近 500,000 局** self-play 数据" 作为训练 buffer
+
+- **AlphaZero (推广到多种棋类)**:
+  - Silver et al., "A general reinforcement learning algorithm that masters chess, shogi, and Go through self-play", *Science* 362, 1140–1144, 2018
+
+#### 注意
+
+- "最近 20 轮" 这个具体数字 **没有论文出处**，是 `alpha-zero-general` 作者基于教学项目规模的工程经验值
+- DeepMind 论文使用的是**最近 N 局**（按对局数计算），不是**最近 N 轮**（按训练迭代计算）
+- 严谨引用时应使用 **AlphaGo Zero (Nature 2017)** 的 Methods 部分作为权威依据
+
+#### 温度退火 (Temperature Annealing)
+
+- **AlphaGo Zero**：Methods 部分描述 self-play 中前 30 步使用 temperature=1（探索），之后切换为接近确定性的选择
+- 这是优化项 1 (分段温度) 的论文依据
