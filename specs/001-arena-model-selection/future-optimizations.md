@@ -189,6 +189,191 @@ def add_iteration_examples(self, examples):
 
 ---
 
+## 优化项 3.5: 训练历史持久化（Resume Bug 修复）🔴 高优先级
+
+### 问题
+
+当前的滑动窗口实现存在一个 bug：`train_examples_history` **只存在内存中**，不会被保存到 checkpoint。这导致：
+
+- 用 `--resume` 恢复训练时，**所有历史数据都丢失**
+- 恢复后第一轮训练只有 1 轮新数据，相当于从零开始填窗口
+- 滑动窗口的设计目的（保留近期多样化数据）完全失效
+
+### alpha-zero-general 的做法
+
+参考 `alpha-zero-general/Coach.py`：
+
+```python
+def saveTrainExamples(self, iteration):
+    folder = self.args.checkpoint
+    if not os.path.exists(folder):
+        os.makedirs(folder)
+    filename = os.path.join(folder, self.getCheckpointFile(iteration) + ".examples")
+    with open(filename, "wb+") as f:
+        Pickler(f).dump(self.trainExamplesHistory)
+
+def loadTrainExamples(self):
+    modelFile = os.path.join(self.args.load_folder_file[0], self.args.load_folder_file[1])
+    examplesFile = modelFile + ".examples"
+    if not os.path.isfile(examplesFile):
+        log.warning(f'File "{examplesFile}" with trainExamples not found!')
+        r = input("Continue? [y|n]")
+        if r != "y":
+            sys.exit()
+    else:
+        log.info("File with trainExamples found. Loading it...")
+        with open(examplesFile, "rb") as f:
+            self.trainExamplesHistory = Unpickler(f).load()
+```
+
+关键设计：
+
+| 设计点 | 做法 |
+|--------|------|
+| **存储格式** | pickle 二进制 |
+| **存储位置** | 与 checkpoint 同名 + `.examples` 后缀 |
+| **存储时机** | 每轮训练后立刻保存 |
+| **滑动窗口** | 只在内存中维护，磁盘上保留所有历史文件 |
+| **加载** | resume 时根据指定 checkpoint 加载对应 examples |
+| **失败处理** | 文件丢失时弹出 input() 让用户决定 |
+| **垃圾回收** | 不删除旧文件 |
+
+### 解决方案
+
+```python
+import pickle
+
+def save_checkpoint(self, iteration, accepted_count=0, rejected_count=0):
+    # 保存模型状态（已有）
+    torch.save({...}, f"{self.checkpoint_path}_{iteration}.pt")
+
+    # 单独保存训练历史（pickle）
+    examples_path = f"{self.checkpoint_path}_{iteration}.pt.examples"
+    with open(examples_path, "wb") as f:
+        pickle.dump(self.train_examples_history, f)
+
+def load_checkpoint(self, path):
+    # 加载模型（已有）
+    checkpoint = torch.load(path)
+    ...
+
+    # 加载训练历史
+    examples_path = path + ".examples"
+    if os.path.exists(examples_path):
+        with open(examples_path, "rb") as f:
+            self.train_examples_history = pickle.load(f)
+        print(f"Loaded {len(self.train_examples_history)} iterations of training history")
+    else:
+        print(f"Warning: {examples_path} not found, starting with empty history")
+        self.train_examples_history = []
+```
+
+### 文件大小估算
+
+20 轮 × 100 局/轮 × ~30 步/局 × 6 数据增强 × ~3KB/样本 ≈ **~100 MB**
+
+可以接受。alpha-zero-general 也是这个量级。
+
+### 验证方法
+
+1. 训练 5 轮，停止
+2. 用 `--resume checkpoint_4.pt` 恢复
+3. 检查日志确认 `Loaded 5 iterations of training history`
+4. 第一轮恢复后训练应使用 5 轮的累积数据，而不是只 1 轮
+
+---
+
+## 优化项 3.7: 修复 `num_epochs` 命名误导 🟡 中优先级
+
+### 问题
+
+`AlphaZeroTrainer.__init__()` 中的 `num_epochs` 参数**名字误导**，实际行为不是传统意义上的 epoch。
+
+当前代码 (`train.py`):
+
+```python
+mini_batch = random.sample(
+    all_examples, min(len(all_examples), self.batch_size * self.num_epochs)
+)
+
+for i in range(0, len(mini_batch), self.batch_size):
+    batch_states = states[i : i + self.batch_size]
+    # ... forward, backward, update ...
+```
+
+实际行为：
+
+| 配置 | 实际含义 |
+|------|---------|
+| `num_epochs=100, batch_size=128` | 取 12800 个样本，跑 100 个 batch（每个样本只看 1 次） |
+| `num_epochs=10, batch_size=128` | 取 1280 个样本，跑 10 个 batch（每个样本只看 1 次） |
+
+它实际上是 **"每轮迭代做几次梯度更新"**，不是真正的 "数据集跑几遍"。
+
+### 与 alpha-zero-general 对比
+
+alpha-zero-general 的 `epochs=10` 是**真正的 10 个 epoch**：
+- 每个 epoch 把所有训练数据完整跑一遍
+- 10 个 epoch 意味着每个样本被看 10 次
+
+两个项目用同一个名字，但语义完全不同。
+
+### 后果
+
+- **理解混乱**：阅读代码或文档时会误以为模型在数据上跑了多遍
+- **调参困难**：如果想模仿 alpha-zero-general 的 epochs=10，按当前实现实际只是 10 个梯度步
+- **实际效果"歪打正着"**：把 `num_epochs` 从 100 改到 10 确实有效，但原因不是减少 epoch 数，而是减少梯度步数
+
+### 解决方案
+
+#### 方案 A: 改名 (推荐)
+
+把 `num_epochs` 重命名为 `num_gradient_steps_per_iter`，反映真实语义。
+
+```python
+# train.py
+def __init__(self, ..., num_gradient_steps_per_iter=10, ...):
+    self.num_gradient_steps = num_gradient_steps_per_iter
+
+# train_network()
+mini_batch = random.sample(
+    all_examples,
+    min(len(all_examples), self.batch_size * self.num_gradient_steps),
+)
+```
+
+#### 方案 B: 实现真正的 epochs
+
+保留 `num_epochs` 名字，但让它真的工作：
+
+```python
+def train_network(self, examples):
+    # ... 滑动窗口处理 ...
+    
+    all_examples = [...]
+    
+    for epoch in range(self.num_epochs):
+        random.shuffle(all_examples)
+        for i in range(0, len(all_examples), self.batch_size):
+            batch = all_examples[i : i + self.batch_size]
+            # train on batch
+```
+
+⚠️ 注意：方案 B 会大幅增加单轮训练时间（10 epochs × 数千 batch = 数万步梯度更新）。
+
+### 推荐
+
+**方案 A**（改名）。原因：
+- 当前的 "10 个梯度步" 配置已被验证有效（v4 训练）
+- 不会改变现有行为，只是修正命名
+- 改成方案 B 需要重新调整其他超参数
+
+### 验证
+
+改名后所有测试仍应通过（命名变更不影响逻辑）。
+
+---
+
 ## 优化项 4: 自适应反卡死机制 🟡 中优先级
 
 ### 问题
