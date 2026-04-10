@@ -58,9 +58,11 @@ class TestIntegration:
             # 执行训练
             trainer.train()
             
-            # 检查checkpoint是否生成
+            # 检查checkpoint是否生成 (with arena, rejected models don't get checkpoints)
             checkpoint_files = [f for f in os.listdir(temp_dir) if 'test_checkpoint' in f and f.endswith('.pt')]
-            assert len(checkpoint_files) >= 2  # 应该有至少2个checkpoint
+            assert len(checkpoint_files) >= 1  # at least 1 checkpoint (first auto-accepted)
+            # best.pt should always exist after training
+            assert os.path.exists(os.path.join(temp_dir, 'best.pt'))
             
             # 检查损失是否记录
             assert len(trainer.policy_losses) == 2

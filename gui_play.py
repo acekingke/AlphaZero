@@ -4,6 +4,9 @@ import numpy as np
 import torch
 import sys
 import os
+import argparse
+import glob
+import re
 
 # Add project root to the Python path
 project_root = os.path.dirname(os.path.abspath(__file__))
@@ -14,16 +17,16 @@ from models.neural_network import AlphaZeroNetwork
 from mcts.mcts import MCTS
 
 class OthelloGUI(tk.Tk):
-    def __init__(self, board_size=6, square_size=60, num_simulations=800, c_puct=2.5):
+    def __init__(self, board_size=6, square_size=60, num_simulations=800, c_puct=2.5, model_path=None):
         super().__init__()
         self.title("Othello - You vs AlphaZero")
         self.board_size = board_size
         self.square_size = square_size
         self.canvas_size = board_size * square_size
-        
+
         self.canvas = tk.Canvas(self, width=self.canvas_size, height=self.canvas_size, bg='green')
         self.canvas.pack()
-        
+
         self.status_bar = tk.Label(self, text="Your turn (Black)", bd=1, relief=tk.SUNKEN, anchor=tk.W)
         self.status_bar.pack(fill=tk.X)
 
@@ -34,7 +37,7 @@ class OthelloGUI(tk.Tk):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         if torch.backends.mps.is_available():
             self.device = torch.device("mps")
-        self.model = self.load_model()
+        self.model = self.load_model(model_path)
         print(f"Using device: {self.device} for AI player")
         self.mcts = MCTS(self.model, c_puct=c_puct, num_simulations=num_simulations)
 
@@ -42,10 +45,12 @@ class OthelloGUI(tk.Tk):
         
         self.reset_game()
 
-    def load_model(self):
+    def load_model(self, model_path=None):
         model = AlphaZeroNetwork(game_size=6, num_channels=128, device=self.device)
-        #print("Loading model from checkpoint_32.pt")
-        checkpoint = torch.load('./models/checkpoint_33.pt', map_location=self.device)
+        if model_path is None:
+            model_path = self._find_latest_checkpoint()
+        print(f"Loading model from {model_path}")
+        checkpoint = torch.load(model_path, map_location=self.device)
         
         if 'model_state_dict' in checkpoint:
             model.load_state_dict(checkpoint['model_state_dict'])
@@ -55,6 +60,18 @@ class OthelloGUI(tk.Tk):
         model.to(self.device)
         model.eval()
         return model
+
+    def _find_latest_checkpoint(self):
+        """Find the checkpoint with the highest iteration number."""
+        pattern = './models/checkpoint_*.pt'
+        files = glob.glob(pattern)
+        if not files:
+            raise FileNotFoundError(f"No checkpoints found matching {pattern}")
+        def extract_num(path):
+            match = re.search(r'checkpoint_(\d+)\.pt$', path)
+            return int(match.group(1)) if match else -1
+        files = [f for f in files if extract_num(f) >= 0]
+        return max(files, key=extract_num)
 
     def reset_game(self):
         self.env.reset()
@@ -137,23 +154,42 @@ class OthelloGUI(tk.Tk):
             self.status_bar.config(text="AI (White) is thinking...")
             self.update()
 
-            # Get canonical state for consistency with training
-            canonical_state = self.env.board.get_canonical_state()
-            # Convert to observation format (consistent with MCTS)
-            state = self.mcts._canonical_to_observation(canonical_state, self.env)
+            # Check if AI has any valid moves
+            valid_moves_mask = self.env.get_valid_moves_mask()
+            pass_action = self.board_size * self.board_size
             
-            # Use MCTS to get action probabilities
-            action_probs = self.mcts.search(state, self.env, temperature=0)
-            
-            # Choose the best action
-            action = np.argmax(action_probs)
-
-            # If AI has no valid moves, it must pass
-            if self.env.get_valid_moves_mask()[action] == 0:
-                action = self.env.get_board().get_action_space_size() - 1 # Pass action
+            # If AI has no valid placement moves, it must pass
+            if valid_moves_mask[pass_action] == 1 and valid_moves_mask.sum() == 1:
+                try:
+                    messagebox.showinfo("Pass", "AI (White) has no valid moves. Passing to you.")
+                except Exception:
+                    # In case the GUI is not fully available (tests), continue silently
+                    pass
+                action = pass_action
+            else:
+                # Get canonical state for consistency with training
+                canonical_state = self.env.board.get_canonical_state()
+                # Convert to observation format (consistent with MCTS)
+                state = self.mcts.canonical_to_observation(canonical_state, self.env)
+                
+                # Use MCTS to get action probabilities
+                action_probs = self.mcts.search(state, self.env, temperature=0)
+                
+                # Choose the best action
+                action = np.argmax(action_probs)
+                
+                # Double-check that the chosen action is valid
+                if self.env.get_valid_moves_mask()[action] == 0:
+                    # Fallback: find first valid action
+                    valid_actions = np.where(valid_moves_mask == 1)[0]
+                    if len(valid_actions) > 0:
+                        action = valid_actions[0]
+                    else:
+                        action = pass_action
 
             self.env.step(action)
             self.update_board()
+            self.check_game_over()
 
     def update_status(self):
         board = self.env.get_board()
@@ -191,5 +227,25 @@ class OthelloGUI(tk.Tk):
                 self.destroy()
 
 if __name__ == "__main__":
-    app = OthelloGUI()
+    parser = argparse.ArgumentParser(description='Othello GUI Game - Play against AlphaZero')
+    parser.add_argument('--model', type=str, default=None, help='Path to model checkpoint (default: latest)')
+    parser.add_argument('--mcts_simulations', type=int, default=150, help='Number of MCTS simulations per move (default: 150)')
+    parser.add_argument('--c_puct', type=float, default=2.5, help='c_puct value for MCTS (default: 2.5)')
+    parser.add_argument('--board_size', type=int, default=6, help='Board size (default: 6)')
+    parser.add_argument('--square_size', type=int, default=60, help='Square size in pixels (default: 60)')
+    
+    args = parser.parse_args()
+    
+    print(f"Starting Othello GUI with:")
+    print(f"  MCTS simulations: {args.mcts_simulations}")
+    print(f"  c_puct: {args.c_puct}")
+    print(f"  Board size: {args.board_size}x{args.board_size}")
+    
+    app = OthelloGUI(
+        board_size=args.board_size,
+        square_size=args.square_size,
+        num_simulations=args.mcts_simulations,
+        c_puct=args.c_puct,
+        model_path=args.model,
+    )
     app.mainloop()

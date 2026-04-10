@@ -54,13 +54,13 @@ class TestStateConsistency:
         
         np.testing.assert_array_equal(observation, expected_obs)
     
-    def test_mcts_canonical_to_observation_consistency(self):
+    def test_mctscanonical_to_observation_consistency(self):
         """测试MCTS中canonical state到observation的转换一致性"""
         self.env.reset()
         canonical_state = self.env.board.get_canonical_state()
         
         # 使用MCTS的转换函数
-        mcts_observation = self.mcts._canonical_to_observation(canonical_state, self.env)
+        mcts_observation = self.mcts.canonical_to_observation(canonical_state, self.env)
         
         # 使用环境的观察函数
         env_observation = self.env.board.get_observation()
@@ -80,7 +80,7 @@ class TestStateConsistency:
         
         # 模拟训练中的状态处理
         canonical_state = self.env.board.get_canonical_state()
-        training_state = self.mcts._canonical_to_observation(canonical_state, self.env)
+        training_state = self.mcts.canonical_to_observation(canonical_state, self.env)
         
         # 模拟评估中的状态处理（应该与训练一致）
         player = AlphaZeroPlayer(self.model, num_simulations=10)
@@ -88,7 +88,7 @@ class TestStateConsistency:
         # 获取AlphaZeroPlayer处理的状态
         # （这需要查看play.py中的实现）
         evaluation_canonical = self.env.board.get_canonical_state()
-        evaluation_state = player.mcts._canonical_to_observation(evaluation_canonical, self.env)
+        evaluation_state = player.mcts.canonical_to_observation(evaluation_canonical, self.env)
         
         # 训练和评估的状态应该一致
         np.testing.assert_array_equal(training_state, evaluation_state)

@@ -81,3 +81,25 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+
+# speckit-installed skills (per agent folder security warning)
+.claude/
+
+# Debug/analysis scripts and logs
+*.log
+*.sh
+analyze_training.py
+arena.py
+check.py
+checkpoint_battle.py
+debug_mcts_logic.py
+evaluate_power_ranking.py
+extended_validation.py
+mcts_comparison.py
+selfplay_comparison.py
+stable_evaluation.py
+test_mcts_impact.py
+test_nn_value.py
+test_selfplay_data.py
+test_trained_model.py
+train.txt

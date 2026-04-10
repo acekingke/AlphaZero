@@ -96,7 +96,7 @@ class SimplifiedMCTS:
     def _evaluate_state(self, canonical_state, env):
         """Evaluate state using neural network with canonical state representation."""
         # Convert canonical state to observation format expected by neural network
-        observation = self._canonical_to_observation(canonical_state, env)
+        observation = self.canonical_to_observation(canonical_state, env)
         tensor_obs = torch.FloatTensor(observation).unsqueeze(0)
         
         with torch.no_grad():
@@ -127,7 +127,7 @@ class SimplifiedMCTS:
         
         return masked_policy, value
     
-    def _canonical_to_observation(self, canonical_state, env):
+    def canonical_to_observation(self, canonical_state, env):
         """
         Convert canonical state to observation format for neural network.
         Since we're using canonical state, current player is always +1.
