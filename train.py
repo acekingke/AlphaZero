@@ -101,7 +101,7 @@ def _worker_play(seed_and_count):
             # Use canonical state for consistency with MCTS
             canonical_state = env.board.get_canonical_state()
             # Convert to observation format for neural network (consistent with MCTS)
-            state = mcts._canonical_to_observation(canonical_state, env)
+            state = mcts.canonical_to_observation(canonical_state, env)
             action_probs = mcts.search(state, env, WORKER_TEMPERATURE, add_noise=True)
             # Save state, the pi (policy) returned by MCTS, and the player who made the move
             game_history.append((state, action_probs, env.board.current_player))
@@ -144,6 +144,103 @@ def _worker_play(seed_and_count):
     return results, seed, count, game_stats, worker_id
 
 
+class Arena:
+    """Arena for evaluating two models against each other."""
+
+    def __init__(self, game_size=6, num_games=40, mcts_simulations=25, c_puct=2.0):
+        self.game_size = game_size
+        self.num_games = num_games
+        self.mcts_simulations = mcts_simulations
+        self.c_puct = c_puct
+
+    def play_single_game(self, env, mcts1, mcts2, model1_is_black):
+        """Play a single game between two MCTS agents.
+
+        Args:
+            env: OthelloEnv instance (already reset)
+            mcts1: MCTS instance for model 1
+            mcts2: MCTS instance for model 2
+            model1_is_black: if True, model1 plays as Black (-1)
+
+        Returns:
+            1 if model1 wins, 2 if model2 wins, 0 if draw
+        """
+        # Black is -1, White is 1
+        if model1_is_black:
+            player_map = {-1: mcts1, 1: mcts2}
+        else:
+            player_map = {-1: mcts2, 1: mcts1}
+
+        while not env.board.is_done():
+            current_player = env.board.current_player
+            mcts = player_map[current_player]
+
+            canonical_state = env.board.get_canonical_state()
+            state = mcts.canonical_to_observation(canonical_state, env)
+            action_probs = mcts.search(state, env, temperature=0, add_noise=False)
+
+            action = np.argmax(action_probs)
+            _, _, done, _ = env.step(action)
+            if done:
+                break
+
+        winner = env.board.get_winner()
+        if winner == 0:
+            return 0  # draw
+
+        # Map board winner to model number
+        if model1_is_black:
+            return 1 if winner == -1 else 2
+        else:
+            return 1 if winner == 1 else 2
+
+    def play_games(self, model1_state_dict, model2_state_dict):
+        """Play arena games between two models.
+
+        Args:
+            model1_state_dict: state dict for model 1 (candidate)
+            model2_state_dict: state dict for model 2 (best)
+
+        Returns:
+            (model1_wins, model2_wins, draws)
+        """
+        model1 = AlphaZeroNetwork(self.game_size, device="cpu")
+        model1.load_state_dict(model1_state_dict)
+        model1.to("cpu")
+        model1.eval()
+
+        model2 = AlphaZeroNetwork(self.game_size, device="cpu")
+        model2.load_state_dict(model2_state_dict)
+        model2.to("cpu")
+        model2.eval()
+
+        mcts1 = MCTS(model1, c_puct=self.c_puct, num_simulations=self.mcts_simulations)
+        mcts2 = MCTS(model2, c_puct=self.c_puct, num_simulations=self.mcts_simulations)
+
+        model1_wins = 0
+        model2_wins = 0
+        draws = 0
+
+        half = self.num_games // 2
+
+        for game_idx in range(self.num_games):
+            env = OthelloEnv(size=self.game_size)
+            env.reset()
+
+            # First half: model1 plays as Black; second half: model1 plays as White
+            model1_is_black = game_idx < half
+
+            result = self.play_single_game(env, mcts1, mcts2, model1_is_black)
+            if result == 1:
+                model1_wins += 1
+            elif result == 2:
+                model2_wins += 1
+            else:
+                draws += 1
+
+        return model1_wins, model2_wins, draws
+
+
 class AlphaZeroTrainer:
     """Trainer for AlphaZero."""
 
@@ -158,7 +255,6 @@ class AlphaZeroTrainer:
         batch_size=64,
         num_epochs=100,
         lr=0.001,
-        l2_regularization=1e-4,  # L2 regularization coefficient (c in paper)
         checkpoint_path="./models/checkpoint",
         use_mps=True,
         use_cuda=True,
@@ -168,6 +264,9 @@ class AlphaZeroTrainer:
         mp_games_per_worker=1,
         dirichlet_alpha=0.3,
         dirichlet_weight=0.25,
+        arena_games=40,
+        arena_threshold=0.6,
+        arena_mcts_simulations=25,
     ):
         self.game_size = game_size
         self.num_iterations = num_iterations
@@ -178,7 +277,6 @@ class AlphaZeroTrainer:
         self.batch_size = batch_size
         self.num_epochs = num_epochs
         self.lr = lr
-        self.l2_regularization = l2_regularization  # L2 regularization coefficient
         self.checkpoint_path = checkpoint_path
         self.log_dir = log_dir
 
@@ -219,6 +317,11 @@ class AlphaZeroTrainer:
         self.dirichlet_alpha = dirichlet_alpha
         self.dirichlet_weight = dirichlet_weight
 
+        # Arena parameters
+        self.arena_games = arena_games
+        self.arena_threshold = arena_threshold
+        self.arena_mcts_simulations = arena_mcts_simulations
+
     def self_play(self):
         """
         Perform self-play to generate training data.
@@ -253,7 +356,7 @@ class AlphaZeroTrainer:
                 # Use canonical state for consistency with MCTS
                 canonical_state = env.board.get_canonical_state()
                 # Convert to observation format for neural network (consistent with MCTS)
-                state = mcts._canonical_to_observation(canonical_state, env)
+                state = mcts.canonical_to_observation(canonical_state, env)
                 action_probs = mcts.search(state, env, self.temperature, add_noise=True)
 
                 # Save state, the pi (policy) returned by MCTS, and the player who made the move
@@ -468,14 +571,8 @@ class AlphaZeroTrainer:
             ) / batch_states.size(0)
             value_loss = nn.MSELoss()(value_pred, batch_values)
 
-            # Add L2 regularization term: c||θ||^2
-            l2_reg = 0
-            for param in self.model.parameters():
-                l2_reg += torch.norm(param) ** 2
-            l2_reg = self.l2_regularization * l2_reg
-
-            # Complete AlphaZero loss: L = (z-v)^2 - π^T log p + c||θ||^2
-            total_loss = value_loss + policy_loss + l2_reg
+            # L2 regularization is handled by Adam's weight_decay parameter
+            total_loss = value_loss + policy_loss
 
             # Backward pass and optimization
             self.optimizer.zero_grad()
@@ -502,12 +599,8 @@ class AlphaZeroTrainer:
 
         return avg_policy_loss, avg_value_loss, avg_total_loss
 
-    def save_checkpoint(self, iteration):
-        """Save model checkpoint."""
-        # Use iteration number directly as checkpoint number (allow overwrite)
-        checkpoint_number = iteration
-
-        # Save checkpoint with current training state
+    def save_checkpoint(self, iteration, accepted_count=0, rejected_count=0):
+        """Save model checkpoint for an accepted iteration."""
         torch.save(
             {
                 "iteration": iteration,
@@ -516,20 +609,24 @@ class AlphaZeroTrainer:
                 "policy_losses": self.policy_losses,
                 "value_losses": self.value_losses,
                 "total_losses": self.total_losses,
+                "accepted_count": accepted_count,
+                "rejected_count": rejected_count,
             },
-            f"{self.checkpoint_path}_{checkpoint_number}.pt",
+            f"{self.checkpoint_path}_{iteration}.pt",
         )
 
-        print(f"Saved checkpoint: {self.checkpoint_path}_{checkpoint_number}.pt")
+        print(f"Saved checkpoint: {self.checkpoint_path}_{iteration}.pt")
 
     def load_checkpoint(self, path):
-        """Load model checkpoint."""
+        """Load model checkpoint. Returns (iteration, accepted_count, rejected_count)."""
         checkpoint = torch.load(path)
         self.model.load_state_dict(checkpoint["model_state_dict"])
         self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
         self.policy_losses = checkpoint.get("policy_losses", [])
         self.value_losses = checkpoint.get("value_losses", [])
         self.total_losses = checkpoint.get("total_losses", [])
+        self._resumed_accepted_count = checkpoint.get("accepted_count", 0)
+        self._resumed_rejected_count = checkpoint.get("rejected_count", 0)
 
         # Load existing loss records into logger
         for i, (p_loss, v_loss, t_loss) in enumerate(
@@ -590,6 +687,28 @@ class AlphaZeroTrainer:
         # Adjust total iterations to ensure we train for the specified number regardless of resuming
         end_iteration = start_iteration + max_iterations
 
+        # Load best model if it exists
+        models_dir = os.path.dirname(self.checkpoint_path)
+        best_path = os.path.join(models_dir, "best.pt")
+        if os.path.exists(best_path):
+            best_model_state = torch.load(best_path, map_location="cpu")
+            print(f"Loaded best model from {best_path}")
+        else:
+            best_model_state = None
+            print("No best model found, first iteration will auto-accept")
+
+        # Arena for model evaluation
+        arena = Arena(
+            game_size=self.game_size,
+            num_games=self.arena_games,
+            mcts_simulations=self.arena_mcts_simulations,
+            c_puct=self.c_puct,
+        )
+
+        # Restore accept/reject counts from checkpoint if resuming
+        accepted_count = getattr(self, "_resumed_accepted_count", 0)
+        rejected_count = getattr(self, "_resumed_rejected_count", 0)
+
         # Training loop
         for iteration in range(start_iteration, end_iteration):
             iteration_start_time = time.time()
@@ -636,8 +755,60 @@ class AlphaZeroTrainer:
                 elapsed_time=elapsed_time,
             )
 
-            # Save checkpoint
-            self.save_checkpoint(iteration)
+            # Save candidate as temp.pt for crash recovery
+            temp_path = os.path.join(models_dir, "temp.pt")
+            candidate_state = {k: v.cpu() for k, v in self.model.state_dict().items()}
+            torch.save(candidate_state, temp_path)
+
+            # First iteration auto-accept (no best model to compare against)
+            if best_model_state is None:
+                print("First iteration — auto-accepting model as best")
+                torch.save(candidate_state, best_path)
+                accepted_count += 1
+                self.save_checkpoint(iteration, accepted_count, rejected_count)
+                best_model_state = candidate_state
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
+                print(
+                    f"Arena: ACCEPTED (first iteration) | Accepted: {accepted_count}, Rejected: {rejected_count}"
+                )
+            else:
+                # Run arena evaluation
+                print(f"Arena evaluation: {self.arena_games} games...")
+                new_wins, old_wins, draws = arena.play_games(
+                    candidate_state, best_model_state
+                )
+                denominator = new_wins + old_wins
+                win_rate = new_wins / denominator if denominator > 0 else 0.0
+
+                print(
+                    f"Arena: New model wins: {new_wins}, Best model wins: {old_wins}, "
+                    f"Draws: {draws}, Win rate: {win_rate * 100:.1f}%"
+                )
+
+                if win_rate >= self.arena_threshold:
+                    print(
+                        f"Arena: ACCEPTING new model (win rate {win_rate * 100:.1f}% >= {self.arena_threshold * 100:.1f}%)"
+                    )
+                    torch.save(candidate_state, best_path)
+                    accepted_count += 1
+                    self.save_checkpoint(iteration, accepted_count, rejected_count)
+                    best_model_state = candidate_state
+                else:
+                    print(
+                        f"Arena: REJECTING new model (win rate {win_rate * 100:.1f}% < {self.arena_threshold * 100:.1f}%)"
+                    )
+                    # Reload best model weights into the live trainer model
+                    self.model.load_state_dict(best_model_state)
+                    self.model.to(self.device)
+                    rejected_count += 1
+
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
+
+                print(
+                    f"Iteration {iteration}: Accepted: {accepted_count}, Rejected: {rejected_count}"
+                )
 
             # Plot metrics
             if (iteration + 1) % 5 == 0 or iteration == end_iteration - 1:

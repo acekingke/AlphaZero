@@ -19,9 +19,9 @@
 
 **Purpose**: Clean slate and parameter wiring
 
-- [ ] T001 Delete all existing model checkpoints in models/checkpoint_*.pt
-- [ ] T002 Add arena parameters to AlphaZeroTrainer.__init__() in train.py: arena_games (default 40), arena_threshold (default 0.6), arena_mcts_simulations (default 25)
-- [ ] T003 Add CLI arguments --arena_games, --arena_threshold, --arena_mcts_simulations to train subparser in main.py and pass to AlphaZeroTrainer
+- [x] T001 Delete all existing model checkpoints in models/checkpoint_*.pt
+- [x] T002 Add arena parameters to AlphaZeroTrainer.__init__() in train.py: arena_games (default 40), arena_threshold (default 0.6), arena_mcts_simulations (default 25)
+- [x] T003 Add CLI arguments --arena_games, --arena_threshold, --arena_mcts_simulations to train subparser in main.py and pass to AlphaZeroTrainer
 
 **Checkpoint**: CLI wired, parameters flow from command line to trainer
 
@@ -33,8 +33,8 @@
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T004 Implement Arena class in train.py with method play_games(model1_state_dict, model2_state_dict) that returns (model1_wins, model2_wins, draws). Must: create two AlphaZeroNetwork instances on CPU, create MCTS with arena_mcts_simulations, play arena_games total (half with model1 as Black, half as White), use temperature=0 for deterministic play
-- [ ] T005 Add Arena.play_single_game(env, mcts1, mcts2, model1_is_black) helper that plays one game to completion and returns winner
+- [x] T004 Implement Arena class in train.py with method play_games(model1_state_dict, model2_state_dict) that returns (model1_wins, model2_wins, draws). Must: create two AlphaZeroNetwork instances on CPU, create MCTS with arena_mcts_simulations, play arena_games total (half with model1 as Black, half as White), use temperature=0 for deterministic play
+- [x] T005 Add Arena.play_single_game(env, mcts1, mcts2, model1_is_black) helper that plays one game to completion and returns winner
 
 **Checkpoint**: Arena can play matches between two models and return results
 
@@ -48,20 +48,20 @@
 
 ### Tests for User Story 1
 
-- [ ] T006 [P] [US1] Test arena plays correct total games (20 as each color) in tests/test_arena.py
-- [ ] T007 [P] [US1] Test model accepted when new_wins/(new_wins+old_wins) >= 0.6 in tests/test_arena.py
-- [ ] T008 [P] [US1] Test model rejected when win rate < 0.6 in tests/test_arena.py
-- [ ] T009 [P] [US1] Test all-draws results in rejection (conservative) in tests/test_arena.py
-- [ ] T010 [P] [US1] Test first iteration auto-accepts when no best.pt exists in tests/test_arena.py
+- [x] T006 [P] [US1] Test arena plays correct total games (20 as each color) in tests/test_arena.py
+- [x] T007 [P] [US1] Test model accepted when new_wins/(new_wins+old_wins) >= 0.6 in tests/test_arena.py
+- [x] T008 [P] [US1] Test model rejected when win rate < 0.6 in tests/test_arena.py
+- [x] T009 [P] [US1] Test all-draws results in rejection (conservative) in tests/test_arena.py
+- [x] T010 [P] [US1] Test first iteration auto-accepts when no best.pt exists in tests/test_arena.py
 
 ### Implementation for User Story 1
 
-- [ ] T011 [US1] Modify AlphaZeroTrainer.train() in train.py: at start, check if models/best.pt exists; if yes, load as best model state dict; if no, set best_model_state = None
-- [ ] T012 [US1] Modify AlphaZeroTrainer.train() in train.py: after train_network(), save candidate as models/temp.pt
-- [ ] T013 [US1] Modify AlphaZeroTrainer.train() in train.py: if best_model_state is None (first iteration), auto-accept — copy temp.pt to best.pt and checkpoint_N.pt, set best_model_state
-- [ ] T014 [US1] Modify AlphaZeroTrainer.train() in train.py: if best_model_state exists, run Arena.play_games(candidate_state, best_state); compute win_rate = new_wins/(new_wins+old_wins) with 0.0 if denominator is 0
-- [ ] T015 [US1] Modify AlphaZeroTrainer.train() in train.py: if win_rate >= threshold, ACCEPT — promote temp.pt to best.pt, save checkpoint_N.pt, update best_model_state; else REJECT — delete temp.pt, reload best.pt weights into self.model
-- [ ] T016 [US1] Add accept/reject logging: print wins, losses, draws, win rate, and ACCEPTING/REJECTING decision
+- [x] T011 [US1] Modify AlphaZeroTrainer.train() in train.py: at start, check if models/best.pt exists; if yes, load as best model state dict; if no, set best_model_state = None
+- [x] T012 [US1] Modify AlphaZeroTrainer.train() in train.py: after train_network(), save candidate as models/temp.pt
+- [x] T013 [US1] Modify AlphaZeroTrainer.train() in train.py: if best_model_state is None (first iteration), auto-accept — copy temp.pt to best.pt and checkpoint_N.pt, set best_model_state
+- [x] T014 [US1] Modify AlphaZeroTrainer.train() in train.py: if best_model_state exists, run Arena.play_games(candidate_state, best_state); compute win_rate = new_wins/(new_wins+old_wins) with 0.0 if denominator is 0
+- [x] T015 [US1] Modify AlphaZeroTrainer.train() in train.py: if win_rate >= threshold, ACCEPT — promote temp.pt to best.pt, save checkpoint_N.pt, update best_model_state; else REJECT — delete temp.pt, reload best.pt weights into self.model
+- [x] T016 [US1] Add accept/reject logging: print wins, losses, draws, win rate, and ACCEPTING/REJECTING decision
 
 **Checkpoint**: Training loop with full arena quality gate. Run 3 iterations and verify best.pt is maintained correctly.
 
@@ -75,8 +75,8 @@
 
 ### Implementation for User Story 2
 
-- [ ] T017 [US2] Verify Arena.play_games() in train.py splits games evenly: first half model1=Black, second half model1=White (already designed in T004; this task validates and adds assertion logging)
-- [ ] T018 [US2] Verify win rate calculation excludes draws: win_rate = new_wins/(new_wins+old_wins), not total games (already designed in T014; this task adds explicit test)
+- [x] T017 [US2] Verify Arena.play_games() in train.py splits games evenly: first half model1=Black, second half model1=White (already designed in T004; this task validates and adds assertion logging)
+- [x] T018 [US2] Verify win rate calculation excludes draws: win_rate = new_wins/(new_wins+old_wins), not total games (already designed in T014; this task adds explicit test)
 
 **Checkpoint**: Arena fairness verified — color swap and draw exclusion confirmed
 
@@ -90,8 +90,8 @@
 
 ### Implementation for User Story 3
 
-- [ ] T019 [US3] Enhance arena logging in train.py: after each arena evaluation, print formatted summary: "Arena: New model wins: X, Best model wins: Y, Draws: Z, Win rate: XX.X% → ACCEPTED/REJECTED"
-- [ ] T020 [US3] Add iteration summary in train.py: at end of each iteration, print whether this iteration's model was accepted or rejected, and total accepted/rejected count so far
+- [x] T019 [US3] Enhance arena logging in train.py: after each arena evaluation, print formatted summary: "Arena: New model wins: X, Best model wins: Y, Draws: Z, Win rate: XX.X% → ACCEPTED/REJECTED"
+- [x] T020 [US3] Add iteration summary in train.py: at end of each iteration, print whether this iteration's model was accepted or rejected, and total accepted/rejected count so far
 
 **Checkpoint**: Clear, readable training output showing arena decisions
 
@@ -101,9 +101,9 @@
 
 **Purpose**: Final validation and cleanup
 
-- [ ] T021 Run full test suite (pytest tests/) to verify no regressions
-- [ ] T022 Run training for 5+ iterations and verify best.pt win rate against random improves or stays stable
-- [ ] T023 Update quickstart.md in specs/001-arena-model-selection/quickstart.md with actual verified commands
+- [x] T021 Run full test suite (pytest tests/) to verify no regressions
+- [x] T022 Run training for 5+ iterations and verify best.pt win rate against random improves or stays stable
+- [x] T023 Update quickstart.md in specs/001-arena-model-selection/quickstart.md with actual verified commands
 
 ---
 
