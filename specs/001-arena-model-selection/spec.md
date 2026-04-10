@@ -58,6 +58,14 @@ As a trainer, I can see the arena evaluation results after each iteration, inclu
 - What happens when the arena produces only draws (0 wins on both sides)? The new model is rejected (conservative approach).
 - What happens when training starts fresh with no existing best model? The first trained model is automatically accepted.
 - What happens if all old checkpoints are deleted before starting? Training starts from scratch with a randomly initialized model.
+- What happens if training crashes during arena evaluation? The candidate model is preserved as `temp.pt` and can be used to resume.
+
+## Clarifications
+
+### Session 2026-04-10
+
+- Q: How many MCTS simulations should arena matches use? → A: 25 simulations (reduced budget for faster evaluation)
+- Q: How should the system handle crashes during arena evaluation? → A: Save candidate as `temp.pt` before arena; delete on reject, promote on accept
 
 ## Requirements *(mandatory)*
 
@@ -71,6 +79,9 @@ As a trainer, I can see the arena evaluation results after each iteration, inclu
 - **FR-006**: System MUST reject the new model and revert to the best model when the win rate threshold is not met
 - **FR-007**: System MUST accept the first trained model automatically when no best model exists
 - **FR-008**: System MUST support a configurable number of arena games (default 40)
+- **FR-011**: Arena matches MUST use 25 MCTS simulations per move for evaluation speed
+- **FR-012**: System MUST save the candidate model as `temp.pt` before arena evaluation begins
+- **FR-013**: System MUST delete `temp.pt` when the candidate is rejected, or promote it to `best.pt` when accepted
 - **FR-009**: System MUST display arena results (wins, losses, draws, win rate, accept/reject decision) after each evaluation
 - **FR-010**: System MUST save accepted models as both `best.pt` and `checkpoint_N.pt` (for history)
 
@@ -87,7 +98,7 @@ As a trainer, I can see the arena evaluation results after each iteration, inclu
 - **SC-001**: Over a 10-iteration training run, the best model's win rate against a random player never decreases between accepted checkpoints
 - **SC-002**: The model accepted after 10+ iterations achieves at least 50% win rate against a random opponent (up from the current 2%)
 - **SC-003**: At least 30% of training iterations result in model rejection, demonstrating that the quality gate is actively filtering
-- **SC-004**: Arena evaluation completes within 5 minutes per iteration (for 40 games with 50 MCTS simulations)
+- **SC-004**: Arena evaluation completes within 3 minutes per iteration (for 40 games with 25 MCTS simulations)
 
 ## Assumptions
 
