@@ -22,6 +22,7 @@ def main():
     train_parser.add_argument('--temperature', type=float, default=0.8, help='Temperature parameter for MCTS action selection (higher = more exploration)')
     train_parser.add_argument('--c_puct', type=float, default=1.0, help='c_puct value for MCTS (exploration constant)')
     train_parser.add_argument('--batch_size', type=int, default=128, help='Batch size for training')
+    train_parser.add_argument('--num_epochs', type=int, default=10, help='Training epochs per iteration (default: 10, lower prevents overfitting)')
     train_parser.add_argument('--resume', type=str, help='Path to checkpoint to resume training from')
     train_parser.add_argument('--use_mps', action='store_true', help='Use MPS acceleration on macOS if available')
     train_parser.add_argument('--use_cpu', action='store_true', help='Force use CPU even if GPU is available')
@@ -33,6 +34,9 @@ def main():
     train_parser.add_argument('--arena_games', type=int, default=40, help='Number of arena games per evaluation (default: 40)')
     train_parser.add_argument('--arena_threshold', type=float, default=0.6, help='Win rate threshold for accepting new model (default: 0.6)')
     train_parser.add_argument('--arena_mcts_simulations', type=int, default=25, help='Number of MCTS simulations per move in arena (default: 25)')
+    train_parser.add_argument('--temp_threshold', type=int, default=15, help='Move count after which temperature drops to 0 (default: 15, AlphaGo Zero style)')
+    train_parser.add_argument('--eval_vs_random_interval', type=int, default=5, help='Evaluate vs random every N iterations (default: 5)')
+    train_parser.add_argument('--eval_vs_random_games', type=int, default=30, help='Number of games for vs-random evaluation (default: 30)')
     
     # Play command
     play_parser = subparsers.add_parser('play', help='Play against the trained model')
@@ -71,6 +75,7 @@ def main():
             temperature=args.temperature,
             c_puct=args.c_puct,
             batch_size=args.batch_size,
+            num_epochs=args.num_epochs,
             use_mps=args.use_mps,
             use_cuda=not args.use_cpu,
             use_multiprocessing=args.use_multiprocessing,
@@ -80,7 +85,10 @@ def main():
             dirichlet_weight=args.dirichlet_weight,
             arena_games=args.arena_games,
             arena_threshold=args.arena_threshold,
-            arena_mcts_simulations=args.arena_mcts_simulations
+            arena_mcts_simulations=args.arena_mcts_simulations,
+            temp_threshold=args.temp_threshold,
+            eval_vs_random_interval=args.eval_vs_random_interval,
+            eval_vs_random_games=args.eval_vs_random_games,
         )
         trainer.train(resume_from=args.resume)
     

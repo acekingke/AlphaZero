@@ -298,5 +298,81 @@ class TestTrainerAcceptRejectIntegration(unittest.TestCase):
         self.assertTrue(torch.all(first_param == 0.0))
 
 
+class TestTrainExamplesHistoryPersistence(unittest.TestCase):
+    """Test that train_examples_history is persisted to/from disk on checkpoint save/load."""
+
+    def setUp(self):
+        import tempfile
+        self.tmpdir = tempfile.mkdtemp()
+        self.checkpoint_path = os.path.join(self.tmpdir, "checkpoint")
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.tmpdir)
+
+    def _make_trainer(self):
+        return AlphaZeroTrainer(
+            game_size=6,
+            num_iterations=1,
+            num_self_play_games=1,
+            num_mcts_simulations=2,
+            batch_size=1,
+            checkpoint_path=self.checkpoint_path,
+            log_dir=self.tmpdir,
+            use_mps=False,
+            use_cuda=False,
+        )
+
+    def test_save_creates_examples_sidecar_file(self):
+        """save_checkpoint should write a .examples sidecar file."""
+        trainer = self._make_trainer()
+        # Stub history with sample data
+        trainer.train_examples_history = [
+            [("state_a", "policy_a", 1.0), ("state_b", "policy_b", -1.0)],
+            [("state_c", "policy_c", 0.0)],
+        ]
+
+        trainer.save_checkpoint(iteration=5)
+
+        examples_file = f"{self.checkpoint_path}_5.pt.examples"
+        self.assertTrue(os.path.exists(examples_file), "examples sidecar file should exist")
+
+    def test_load_restores_history_from_sidecar(self):
+        """load_checkpoint should restore train_examples_history from .examples file."""
+        # First trainer: save with history
+        trainer1 = self._make_trainer()
+        original_history = [
+            [("a", "b", 1.0)],
+            [("c", "d", -1.0), ("e", "f", 0.0)],
+            [("g", "h", 1.0)],
+        ]
+        trainer1.train_examples_history = original_history
+        trainer1.save_checkpoint(iteration=3)
+
+        # Second trainer: load and verify history is restored
+        trainer2 = self._make_trainer()
+        self.assertEqual(trainer2.train_examples_history, [])  # starts empty
+        trainer2.load_checkpoint(f"{self.checkpoint_path}_3.pt")
+
+        self.assertEqual(len(trainer2.train_examples_history), 3)
+        self.assertEqual(trainer2.train_examples_history, original_history)
+
+    def test_load_handles_missing_examples_file(self):
+        """load_checkpoint should fall back to empty history when sidecar is missing."""
+        # Save a checkpoint, then delete only the examples file
+        trainer1 = self._make_trainer()
+        trainer1.train_examples_history = [[("a", "b", 1.0)]]
+        trainer1.save_checkpoint(iteration=2)
+
+        examples_file = f"{self.checkpoint_path}_2.pt.examples"
+        os.remove(examples_file)
+        self.assertFalse(os.path.exists(examples_file))
+
+        # Loading should not crash
+        trainer2 = self._make_trainer()
+        trainer2.load_checkpoint(f"{self.checkpoint_path}_2.pt")
+        self.assertEqual(trainer2.train_examples_history, [])
+
+
 if __name__ == "__main__":
     unittest.main()
