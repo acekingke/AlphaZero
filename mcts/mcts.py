@@ -203,14 +203,17 @@ class MCTS:
         game_ended = env_copy.board.is_done()
         
         if game_ended:
-            # Use game result as value
+            # Terminal value from leaf's current player perspective.
+            # This matches the NN convention where canonical_state is always
+            # from the current player's perspective (current player = +1).
+            # Both branches of the if/else must agree on the value reference
+            # frame for backpropagation to work correctly.
             winner = env_copy.board.get_winner()
             if winner == 0:  # Draw
                 value = 0.0
             else:
-                # 正确的价值计算：从搜索开始时的玩家视角
-                # 如果搜索开始的玩家获胜，value=1；否则value=-1
-                value = 1.0 if winner == self.search_start_player else -1.0
+                leaf_current_player = env_copy.board.current_player
+                value = 1.0 if winner == leaf_current_player else -1.0
         else:
             # Expansion and evaluation
             policy, value = self._evaluate_state(canonical_state, env_copy)
