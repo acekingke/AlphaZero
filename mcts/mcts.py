@@ -177,31 +177,42 @@ class MCTS:
     
     def _simulate_iterative(self, root, env):
         """
-        Perform one MCTS simulation using Tree Visitor pattern (iterative implementation).
-        This avoids recursion stack overflow issues.
+        Perform one MCTS simulation using Tree Visitor pattern (iterative).
+
+        Value perspective convention: every value stored in a node is from
+        the perspective of the player whose turn it is at that state. This
+        matches the canonical_state convention used by the neural network.
+
+        Backpropagation flips the sign ONLY when the actual player switches
+        between nodes. In Othello, a move can trigger a forced pass (opponent
+        has no valid moves), in which case current_player stays the same and
+        the sign should NOT flip for that step.
         """
-        # Tree Visitor pattern: use explicit stack to track path
+        # Tree Visitor pattern: explicit stack of (parent_node, action, player_at_parent)
         path_stack = []
         node = root
         env_copy = copy.deepcopy(env)
-        
+
         # Selection phase - traverse down the tree
         while node.expanded():
             action = node.select_child(self.c_puct)
-            path_stack.append((node, action))
-            
-            # Apply action to environment
+            # Record the player who is about to act at this parent node.
+            # We'll use this during backprop to detect perspective changes.
+            player_at_parent = env_copy.board.current_player
+            path_stack.append((node, action, player_at_parent))
+
             env_copy.step(action)
-            
+
             if action in node.children:
                 node = node.children[action]
             else:
                 break
-        
-        # Evaluation phase
+
+        # Evaluation phase — both branches must produce value from the
+        # leaf's current player's perspective.
         canonical_state = env_copy.board.get_canonical_state()
         game_ended = env_copy.board.is_done()
-        
+
         if game_ended:
             # Terminal value from leaf's current player perspective.
             # This matches the NN convention where canonical_state is always
@@ -215,20 +226,27 @@ class MCTS:
                 leaf_current_player = env_copy.board.current_player
                 value = 1.0 if winner == leaf_current_player else -1.0
         else:
-            # Expansion and evaluation
             policy, value = self._evaluate_state(canonical_state, env_copy)
             node.expand(canonical_state, policy)
-        
-        # Backpropagation phase - propagate value up the path
+
+        # Backpropagation — walk from leaf back to root, flipping the sign
+        # only when the player actually changes between adjacent nodes.
+        leaf_player = env_copy.board.current_player
         node.value_sum += value
         node.visit_count += 1
-        
-        # Backpropagate through the path, flipping value for alternating players
-        current_value = -value  # Flip for parent
-        for parent_node, action in reversed(path_stack):
+
+        current_value = value
+        prev_player = leaf_player
+
+        for parent_node, action, parent_player in reversed(path_stack):
+            # If parent's player differs from the child's (prev) player,
+            # the perspective flips and we negate. Otherwise (forced pass
+            # scenario) the perspective stays the same.
+            if parent_player != prev_player:
+                current_value = -current_value
             parent_node.value_sum += current_value
             parent_node.visit_count += 1
-            current_value = -current_value  # Flip for next parent
+            prev_player = parent_player
     
     def _get_action_probabilities(self, root, temperature, env):
         """Calculate final action probabilities based on visit counts."""
