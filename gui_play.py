@@ -46,7 +46,7 @@ class OthelloGUI(tk.Tk):
         self.reset_game()
 
     def load_model(self, model_path=None):
-        model = AlphaZeroNetwork(game_size=6, num_channels=128, device=self.device)
+        model = AlphaZeroNetwork(game_size=6, device=self.device)
         if model_path is None:
             model_path = self._find_latest_checkpoint()
         print(f"Loading model from {model_path}")

@@ -21,7 +21,7 @@ class ResBlock(nn.Module):
 
 class AlphaZeroNetwork(nn.Module):
     """Neural Network for AlphaZero."""
-    def __init__(self, game_size, num_resblocks=4, num_channels=128, dropout=0.3, device=None):
+    def __init__(self, game_size, num_resblocks=4, num_channels=256, dropout=0.3, device=None):
         super(AlphaZeroNetwork, self).__init__()
 
         # Set device (CUDA, MPS, or CPU)
