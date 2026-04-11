@@ -301,6 +301,21 @@ class AlphaZeroTrainer:
         # Create log directory if it doesn't exist
         os.makedirs(log_dir, exist_ok=True)
 
+        # Validate critical parameters that would cause crashes or
+        # incorrect behavior if misconfigured.
+        if num_epochs < 1:
+            raise ValueError(f"num_epochs must be >= 1, got {num_epochs}")
+        if eval_vs_random_interval < 1:
+            raise ValueError(
+                f"eval_vs_random_interval must be >= 1, got {eval_vs_random_interval}"
+            )
+        if batch_size < 1:
+            raise ValueError(f"batch_size must be >= 1, got {batch_size}")
+        if arena_games < 2 or arena_games % 2 != 0:
+            raise ValueError(
+                f"arena_games must be even and >= 2, got {arena_games}"
+            )
+
         # Get the best available device (CUDA, MPS, or CPU)
         self.device = get_device(use_mps=use_mps, use_cuda=use_cuda)
         print(f"Training will use: {self.device}")
@@ -770,7 +785,9 @@ class AlphaZeroTrainer:
 
     def load_checkpoint(self, path):
         """Load model checkpoint. Returns iteration number."""
-        checkpoint = torch.load(path)
+        # map_location ensures checkpoints saved on GPU can be loaded on CPU
+        # and vice versa.
+        checkpoint = torch.load(path, map_location=self.device)
         self.model.load_state_dict(checkpoint["model_state_dict"])
         self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
         self.policy_losses = checkpoint.get("policy_losses", [])

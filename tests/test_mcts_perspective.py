@@ -71,9 +71,10 @@ class TestTerminalValuePerspective(unittest.TestCase):
             "Test setup failed: Black should have valid moves",
         )
 
-        # Run a single MCTS simulation with search starting from Black's turn
-        # Normally set by MCTS.search(); we bypass that to drive _simulate_iterative directly.
-        self.mcts.search_start_player = -1
+        # Run a single MCTS simulation. We drive _simulate_iterative directly
+        # (bypassing the top-level search() method) to test the backprop logic
+        # in isolation. Terminal value computation uses env_copy.current_player
+        # at the leaf, not any tracked state.
         root = Node(0)  # prior probability = 0 for root
         # Manually expand root with a uniform policy over valid moves
         policy = env.get_valid_moves_mask().astype(np.float32)
@@ -175,8 +176,6 @@ class TestBackpropWithForcedPass(unittest.TestCase):
             )
 
         # Run MCTS — should not crash and should produce a consistent root value.
-        # Normally set by MCTS.search(); we bypass that to drive _simulate_iterative directly.
-        self.mcts.search_start_player = -1
         root = Node(0)  # prior probability = 0 for root
         policy = env.get_valid_moves_mask().astype(np.float32)
         if policy.sum() > 0:

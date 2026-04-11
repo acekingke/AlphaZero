@@ -78,9 +78,6 @@ class MCTS:
         Returns:
             Action probabilities based on visit counts
         """
-        # 记录搜索开始时的玩家，用于正确的价值计算
-        self.search_start_player = env.board.current_player
-        
         # Create root node
         root = Node(0)
         
@@ -257,37 +254,51 @@ class MCTS:
         for action, child in root.children.items():
             if 0 <= action < action_space_size:  # Enhanced bounds check
                 action_probs[action] = child.visit_count
-        
+
+        # Edge case: if no children have any visits (e.g., num_simulations=0
+        # or expansion failure), fall back to a valid-moves uniform distribution
+        # so downstream np.random.choice doesn't crash with "p does not sum to 1".
+        if np.sum(action_probs) == 0:
+            valid_moves_mask = env.get_valid_moves_mask()
+            if np.sum(valid_moves_mask) > 0:
+                action_probs = valid_moves_mask.astype(np.float32) / np.sum(valid_moves_mask)
+            else:
+                # No valid moves and no pass either — degenerate state.
+                # Return uniform over entire action space as last resort.
+                action_probs = np.ones(action_space_size, dtype=np.float32) / action_space_size
+            return action_probs
+
         # Temperature annealing with numerical stability
         if temperature == 0:  # "Deterministic" selection with random tie-breaking
-            if np.sum(action_probs) > 0:
-                # Random tie-breaking among best actions.
-                # Matches alpha-zero-general MCTS.getActionProb (temp=0 branch):
-                # when multiple actions have equal max visit counts (common for
-                # weak networks where MCTS produces near-uniform visit distributions),
-                # pick one at random instead of always the lowest-indexed one
-                # (which np.argmax does). This is the ONLY source of non-determinism
-                # in MCTS with a fixed network, and it's crucial for Arena to
-                # produce statistically meaningful results (otherwise all N arena
-                # games collapse to 2 unique outcomes).
-                max_val = action_probs.max()
-                best_actions = np.flatnonzero(action_probs == max_val)
-                best_action = int(np.random.choice(best_actions))
-                action_probs = np.zeros(len(action_probs))
-                action_probs[best_action] = 1
+            # Random tie-breaking among best actions.
+            # Matches alpha-zero-general MCTS.getActionProb (temp=0 branch):
+            # when multiple actions have equal max visit counts (common for
+            # weak networks where MCTS produces near-uniform visit distributions),
+            # pick one at random instead of always the lowest-indexed one
+            # (which np.argmax does). This is the ONLY source of non-determinism
+            # in MCTS with a fixed network, and it's crucial for Arena to
+            # produce statistically meaningful results (otherwise all N arena
+            # games collapse to 2 unique outcomes).
+            # Note: visit counts are integers stored as float, so equality
+            # comparison is exact. If you ever change action_probs to involve
+            # normalization BEFORE this branch, use np.isclose instead.
+            max_val = action_probs.max()
+            best_actions = np.flatnonzero(action_probs == max_val)
+            best_action = int(np.random.choice(best_actions))
+            action_probs = np.zeros(len(action_probs))
+            action_probs[best_action] = 1
         else:  # Stochastic selection
-            if np.sum(action_probs) > 0:
-                # Prevent numerical overflow by setting minimum temperature
-                safe_temperature = max(temperature, 1e-6)
-                
-                # Additional numerical stability: normalize large values
-                max_val = np.max(action_probs)
-                if max_val > 1000:  # Prevent extreme values from causing overflow
-                    action_probs = action_probs / max_val
-                
-                action_probs = action_probs ** (1 / safe_temperature)
-                action_probs /= np.sum(action_probs)
-        
+            # Prevent numerical overflow by setting minimum temperature
+            safe_temperature = max(temperature, 1e-6)
+
+            # Additional numerical stability: normalize large values
+            max_val = np.max(action_probs)
+            if max_val > 1000:  # Prevent extreme values from causing overflow
+                action_probs = action_probs / max_val
+
+            action_probs = action_probs ** (1 / safe_temperature)
+            action_probs /= np.sum(action_probs)
+
         return action_probs
 # For backward compatibility
 SimplifiedMCTS = MCTS
