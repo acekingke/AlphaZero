@@ -23,6 +23,7 @@ def main():
     train_parser.add_argument('--c_puct', type=float, default=1.0, help='c_puct value for MCTS (exploration constant)')
     train_parser.add_argument('--batch_size', type=int, default=128, help='Batch size for training')
     train_parser.add_argument('--num_epochs', type=int, default=2, help='Number of true epochs over the entire data pool per iteration (default: 2). Each epoch shuffles and trains on all retained samples.')
+    train_parser.add_argument('--lr', type=float, default=0.001, help='Learning rate for Adam optimizer (default: 0.001)')
     train_parser.add_argument('--resume', type=str, help='Path to checkpoint to resume training from')
     train_parser.add_argument('--use_mps', action='store_true', help='Use MPS acceleration on macOS if available')
     train_parser.add_argument('--use_cpu', action='store_true', help='Force use CPU even if GPU is available')
@@ -76,6 +77,7 @@ def main():
             c_puct=args.c_puct,
             batch_size=args.batch_size,
             num_epochs=args.num_epochs,
+            lr=args.lr,
             use_mps=args.use_mps,
             use_cuda=not args.use_cpu,
             use_multiprocessing=args.use_multiprocessing,
