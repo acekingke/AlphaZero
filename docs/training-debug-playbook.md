@@ -480,6 +480,121 @@ MCTS probs at valid moves: ['0.260', '0.260', '0.240', '0.240']
 
 **正常情况**下，即使未训练的网络 + 足够的 MCTS 模拟，访问次数应该有**明显偏差**（例如 60%, 20%, 15%, 5%）。
 
+### 另一个检测方法：Policy Loss 的理论下限
+
+这是一个**更容易观察的信号**：如果 policy loss 卡在 1.3-1.4 无法下降，基本可以确认均匀陷阱。
+
+#### Cross-Entropy 的数学下限
+
+Policy loss 是 cross-entropy loss：
+
+```
+loss = -Σ target[a] * log(pred[a])
+```
+
+即使 NN **完美预测**了目标（pred == target），loss 也**不是 0**。它等于 **target 分布的熵**：
+
+```
+minimum_loss = entropy(target) = -Σ target[a] * log(target[a])
+```
+
+这是**信息论的硬下限**。你不可能训练 loss 低于这个值。
+
+#### 均匀目标 → 高 loss 下限
+
+假设有 4 个合法动作，MCTS 输出 `[0.26, 0.26, 0.24, 0.24]`（接近均匀）：
+
+```python
+import numpy as np
+
+target = [0.26, 0.26, 0.24, 0.24]
+entropy = -sum(p * np.log(p) for p in target if p > 0)
+print(f'Entropy: {entropy:.4f}')
+# 输出: Entropy: 1.3855
+```
+
+**均匀目标的熵 ≈ 1.39**。这是你训练的 **loss 下限**。
+
+无论你训练多久、用多少 epochs、什么学习率，loss **最多降到 1.39 左右就停了**。
+
+#### 非均匀目标 → 低 loss 下限
+
+假设 MCTS 输出 `[0.60, 0.20, 0.10, 0.10]`（有明显偏好）：
+
+```python
+target = [0.60, 0.20, 0.10, 0.10]
+entropy = -sum(p * np.log(p) for p in target if p > 0)
+print(f'Entropy: {entropy:.4f}')
+# 输出: Entropy: 1.0889
+```
+
+新的下限是 **1.09**，比均匀目标 **低 0.3**。
+
+如果 MCTS 输出更强的偏好 `[0.90, 0.05, 0.03, 0.02]`：
+
+```
+entropy ≈ 0.44
+```
+
+下限 **0.44**，低得多。
+
+#### 因此，loss 曲线能诊断陷阱
+
+观察 loss 的稳态值：
+
+| Loss 稳态 | 含义 |
+|----------|------|
+| **~1.40** | 均匀陷阱（目标 ≈ 均匀）🔴 |
+| ~1.10 | 目标略有偏好（约 60-20-10-10 级别）🟡 |
+| ~0.70 | 目标明显偏好（约 80-10-5-5 级别）🟢 |
+| ~0.40 | 目标强偏好（约 90-5-3-2 级别）⭐ |
+| ~0.10 | 目标接近 one-hot ⭐⭐ |
+
+**本项目实际观察到的**：
+
+```
+iter 0: Policy Loss 1.74  (NN 尚未学习)
+iter 1: Policy Loss 1.30  (过拟合小数据池)
+iter 2: Policy Loss 1.36
+iter 3: Policy Loss 1.40
+iter 4: Policy Loss 1.42  ← 稳定在 ~1.40 附近
+iter 5: Policy Loss 1.43
+iter 6: Policy Loss 1.44
+```
+
+**稳定在 1.40**，正好等于均匀目标的熵（1.39）。**这就是均匀陷阱的第二个指纹**。
+
+#### 实用判断
+
+训练时看 loss 曲线：
+
+- **Loss 降到 1.3-1.4 然后不动**：你在均匀陷阱里
+- **Loss 持续下降到 1.0 以下**：陷阱松动，目标变得非均匀
+- **Loss 下降到 0.5 以下**：bootstrap 已经启动，模型学到了真实策略
+
+**一行脚本快速估算你的 loss 下限**：
+
+```python
+# 假设平均每局有 N 个合法动作（Othello 6x6 典型 N=4-8）
+N = 6
+uniform_entropy = np.log(N)
+print(f'Loss floor (uniform targets over {N} actions): {uniform_entropy:.3f}')
+# 输出: Loss floor (uniform targets over 6 actions): 1.792
+```
+
+如果你的 policy loss 卡在这个数字附近，恭喜，你在均匀陷阱里。
+
+#### 为什么这个检测方法比 MCTS 输出更实用
+
+- **MCTS 输出需要写 debug 脚本**
+- **Loss 曲线训练时就在日志里**
+- **一眼看出是否卡在 entropy floor**
+
+每次训练开始前，先算好"如果目标是均匀分布，loss 下限是多少"。训练 5-10 轮后看实际 loss：
+- 远大于下限 → NN 还没收敛，继续训练
+- 等于下限 → **均匀陷阱**，目标有问题
+- 显著低于下限 → 目标变得有信息量了，进步中
+
 ### 为什么会发生
 
 1. **先验几乎均匀**：未训练的 NN 输出接近 uniform
