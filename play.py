@@ -56,9 +56,15 @@ class AlphaZeroPlayer(OthelloPlayer):
 
         self.model = AlphaZeroNetwork(game_size=6, device=self.device)
 
-        # Load the trained model
+        # Load the trained model. Handles both formats:
+        #   - checkpoint_N.pt: dict with {model_state_dict, optimizer_state_dict, ...}
+        #   - best.pt / vs_random_best.pt / temp.pt: raw state_dict (bare tensors)
         checkpoint = torch.load(model_path, map_location=self.device)
-        self.model.load_state_dict(checkpoint["model_state_dict"])
+        if isinstance(checkpoint, dict) and "model_state_dict" in checkpoint:
+            self.model.load_state_dict(checkpoint["model_state_dict"])
+        else:
+            # Raw state_dict (just parameter tensors)
+            self.model.load_state_dict(checkpoint)
         self.model.to(self.device)
         self.model.eval()
 

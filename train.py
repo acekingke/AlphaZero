@@ -873,6 +873,11 @@ class AlphaZeroTrainer:
             print(
                 f"Next iteration: {start_iteration + 1}/{start_iteration + max_iterations}"
             )
+        else:
+            # Fresh training run: reset LR decay counter so calling train()
+            # a second time on the same trainer instance doesn't inherit
+            # decay state from the previous run.
+            self._iteration_count = 0
 
         # Adjust total iterations to ensure we train for the specified number regardless of resuming
         end_iteration = start_iteration + max_iterations
