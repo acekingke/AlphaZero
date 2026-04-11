@@ -424,6 +424,186 @@ num_channels = 256  # 5.1M 参数 (4x)
 
 ---
 
+## MCTS 均匀陷阱 (Uniform Trap)
+
+> **背景**：本项目出现过一个诡异现象：修了所有能想到的 bug，vs random 胜率仍然卡在 20%（甚至有时候更低）。最后发现是 **MCTS 无法产生有意义的训练信号**，陷入"均匀 → 均匀"的死循环。这是 AlphaZero 的**经典 bootstrap 失败**。
+
+### 现象描述
+
+```
+未训练 NN (权重随机) → policy 输出 ≈ 均匀分布
+    ↓
+MCTS (50 模拟) 基于 ≈ 均匀的先验探索
+    ↓
+MCTS 访问次数 ≈ 均匀 (例如 13/13/12/12 visits 给 4 个合法动作)
+    ↓
+训练 NN 去匹配 ≈ 均匀的目标
+    ↓ (1 个 epoch 不够学到那 2-4% 的微小差异)
+NN 继续输出 ≈ 均匀
+    ↓
+死循环，训练永远不启动
+```
+
+### 如何检测
+
+**关键诊断**：直接打印 MCTS 对初始局面的输出。
+
+```python
+import numpy as np
+import torch
+from env.othello import OthelloEnv
+from models.neural_network import AlphaZeroNetwork
+from mcts.mcts import MCTS
+
+torch.manual_seed(42)
+model = AlphaZeroNetwork(6, device='cpu')
+model.eval()
+mcts = MCTS(model, c_puct=2.0, num_simulations=50)
+
+env = OthelloEnv(size=6)
+env.reset()
+canonical = env.board.get_canonical_state()
+state = mcts.canonical_to_observation(canonical, env)
+action_probs = mcts.search(state, env, temperature=1.0)
+
+valid = np.where(env.get_valid_moves_mask() == 1)[0]
+print(f'MCTS probs at valid moves: {[f"{action_probs[i]:.3f}" for i in valid]}')
+```
+
+**症状**：
+
+```
+MCTS probs at valid moves: ['0.260', '0.260', '0.240', '0.240']
+```
+
+所有动作概率在 **24%-26% 之间**（1/N ± 一点点扰动）。这就是均匀陷阱的指纹。
+
+**正常情况**下，即使未训练的网络 + 足够的 MCTS 模拟，访问次数应该有**明显偏差**（例如 60%, 20%, 15%, 5%）。
+
+### 为什么会发生
+
+1. **先验几乎均匀**：未训练的 NN 输出接近 uniform
+2. **50 次模拟不够探索**：PUCT 公式 `u = c * prior * sqrt(N) / (1+n)` 在 prior 均匀时会尽可能平均分配访问次数
+3. **访问次数 ≈ 均匀**：50 visits / 4 actions ≈ 12-13 each
+4. **训练目标 ≈ 均匀**：NN 被训练去预测这种 "1/N + 小噪声" 的分布
+5. **1 个 epoch 不够学到那 2-4% 的差异**：模型收敛到 uniform，不是偏差
+6. **下一轮 MCTS 还是均匀**：因为 NN 仍然输出 uniform
+
+整个系统卡在一个**均匀不动点**里。
+
+### 为什么训练强度可以打破陷阱
+
+alpha-zero-general 用 **10 个 epoch**（每次完整跑 446K 样本 10 遍）。在 10 轮完整训练下：
+
+- NN 不仅匹配均值，还能**学到 2-4% 的微小偏差**
+- 下一轮 MCTS 用这个略有偏差的 NN 做先验
+- PUCT 公式放大先验差异，访问次数分布变得**不均匀**
+- MCTS 输出有真正的偏好
+- NN 学到更强的偏好
+- **bootstrap 循环启动** 🎉
+
+而 1 个 epoch 在数学上就不够：
+
+```
+每轮迭代:
+  - 数据池 ~446K samples
+  - 1 epoch = ~3500 batches
+  - 学习率 0.001 × 每个 batch 的梯度
+  - 权重更新总量 ≈ 3500 * 0.001 * avg_gradient
+  - 不足以改变 NN 的 softmax 输出从 "完全均匀" 变成 "略有偏差"
+```
+
+10 个 epoch 就是 **10x 的权重更新量**，足以让 NN 产生明显偏差。
+
+### 解决方案
+
+**按优先级排序**：
+
+#### ⭐ 最有效：增加训练强度
+
+```python
+num_epochs = 10   # 不是 1！
+```
+
+**效果**：彻底打破均匀陷阱。代价：训练时间 × 10。
+
+#### 🟢 辅助：先验温度 < 1
+
+在 MCTS 使用 NN 策略之前，稍微放大差异：
+
+```python
+policy = torch.softmax(policy_logits / 0.5, dim=1)  # temperature < 1 放大
+```
+
+这让 NN 输出的微小差异变得更明显，加速 bootstrap。但过度放大会让模型过于自信。
+
+#### 🟢 辅助：增加 MCTS 模拟数
+
+更多模拟（例如 200 而不是 50）能让 PUCT 公式的探索项更早衰减，让访问次数反映更多的 value 信号而不是 prior 信号。
+
+#### 🟡 Dirichlet 噪声帮助有限
+
+Dirichlet 噪声只在**根节点**加一次，增加探索的多样性。但它不能从根本上解决均匀陷阱 — 因为它只影响根节点的先验，不影响子节点的 bootstrap。
+
+### 验证是否突破了均匀陷阱
+
+训练几轮后，重新运行上面的诊断脚本。如果看到：
+
+```
+MCTS probs at valid moves: ['0.450', '0.300', '0.150', '0.100']
+```
+
+— 非均匀！不同动作有**明显不同**的概率，说明 NN 已经学到了实际策略，bootstrap 循环启动了。
+
+如果还是：
+
+```
+MCTS probs at valid moves: ['0.260', '0.260', '0.240', '0.240']
+```
+
+— 还在陷阱里。需要更多 epochs、更大网络、或更多 MCTS 模拟。
+
+### 为什么代码 review 找不到这个 bug
+
+**因为它不是代码 bug**：
+
+- MCTS 代码正确
+- NN 代码正确
+- 训练代码正确
+- 每一块单独测试都 pass
+- 但三者组合在一起有一个**动力学失败模式**
+
+这种"系统性"问题只有通过**可视化 MCTS 输出分布**才能看到。
+
+### 与 "Capacity Ceiling" 的区别
+
+两个都表现为"训练后胜率不动"，但原因不同：
+
+| | 均匀陷阱 | Capacity Ceiling |
+|---|---|---|
+| **NN 能否学合成数据？** | ✅ 能 | ✅ 能 |
+| **Loss 是否下降？** | ✅ 略下降 | ✅ 正常下降 |
+| **MCTS 输出分布** | ❌ 几乎均匀 | ✅ 非均匀，但学不到更多 |
+| **解决方式** | 增加训练强度/epochs | 加大网络 |
+
+**诊断顺序**：先检查 MCTS 输出分布。如果均匀 → 均匀陷阱。如果非均匀但学不到更多 → 容量问题。
+
+### 本项目的完整时间线（作为教训）
+
+- v1-v3: MCTS bug 时期，胜率 2-8%
+- v4: epochs=100 (假 10 epochs) → 22%
+- v5-v6: 修各种 MCTS bug → 23%
+- v7-v8: 真 epochs=2 → 20% (轻微退步)
+- v9: +dropout → 20%
+- v10: +256 channels → 10% (更差)
+- **v11: 真 epochs=10** → 待验证 (预期突破 40%+)
+
+**关键教训**：我们花了 v4-v10 共 **7 次实验**，全都在改训练方法论的不同方面，但**没有检查过 MCTS 的输出分布**。如果第一天就运行那 10 行诊断代码，立刻就能看到均匀陷阱。
+
+**每次新项目开始训练前**，先运行这个诊断。它只花几秒钟。
+
+---
+
 ## 一句话总结
 
 > **代码 review 找不到训练方法论问题。只有外部 baseline + 参考实现对比才能发现。**
