@@ -61,9 +61,10 @@ coverage.xml
 
 # AlphaZero specific
 logs/
-models/
+models/*.pt
+models/*.pt.examples
+models/__pycache__/
 *.h5
-*.pt
 *.onnx
 *.pkl
 
