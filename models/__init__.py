@@ -1,2 +1,2 @@
 # Models module initialization
-from .neural_network import AlphaZeroNetwork, ResBlock
+from .neural_network import AlphaZeroNetwork

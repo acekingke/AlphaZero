@@ -119,13 +119,18 @@ class MCTS:
         # Convert canonical state to observation format expected by neural network
         observation = self.canonical_to_observation(canonical_state, env)
         tensor_obs = torch.FloatTensor(observation).unsqueeze(0)
-        
+
+        # BatchNorm in training mode requires batch size > 1. MCTS evaluates
+        # single states, so we MUST put the model in eval mode (which uses
+        # running BN stats instead of per-batch stats).
+        self.model.eval()
+
         with torch.no_grad():
             try:
                 device = next(self.model.parameters()).device
                 if tensor_obs.device != device:
                     tensor_obs = tensor_obs.to(device)
-                
+
                 policy_logits, value = self.model(tensor_obs)
                 policy = torch.softmax(policy_logits, dim=1).squeeze(0).cpu().numpy()
                 value = value.item()
