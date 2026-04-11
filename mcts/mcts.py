@@ -259,9 +259,20 @@ class MCTS:
                 action_probs[action] = child.visit_count
         
         # Temperature annealing with numerical stability
-        if temperature == 0:  # Deterministic selection
+        if temperature == 0:  # "Deterministic" selection with random tie-breaking
             if np.sum(action_probs) > 0:
-                best_action = np.argmax(action_probs)
+                # Random tie-breaking among best actions.
+                # Matches alpha-zero-general MCTS.getActionProb (temp=0 branch):
+                # when multiple actions have equal max visit counts (common for
+                # weak networks where MCTS produces near-uniform visit distributions),
+                # pick one at random instead of always the lowest-indexed one
+                # (which np.argmax does). This is the ONLY source of non-determinism
+                # in MCTS with a fixed network, and it's crucial for Arena to
+                # produce statistically meaningful results (otherwise all N arena
+                # games collapse to 2 unique outcomes).
+                max_val = action_probs.max()
+                best_actions = np.flatnonzero(action_probs == max_val)
+                best_action = int(np.random.choice(best_actions))
                 action_probs = np.zeros(len(action_probs))
                 action_probs[best_action] = 1
         else:  # Stochastic selection

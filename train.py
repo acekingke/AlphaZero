@@ -185,9 +185,11 @@ class Arena:
 
             canonical_state = env.board.get_canonical_state()
             state = mcts.canonical_to_observation(canonical_state, env)
+            # temperature=0 triggers random tie-breaking inside MCTS
+            # (see mcts/mcts.py _get_action_probabilities).
             action_probs = mcts.search(state, env, temperature=0, add_noise=False)
+            action = int(np.argmax(action_probs))  # action_probs is already one-hot after tie-break
 
-            action = np.argmax(action_probs)
             _, _, done, _ = env.step(action)
             if done:
                 break
@@ -278,6 +280,8 @@ class AlphaZeroTrainer:
         temp_threshold=15,
         eval_vs_random_interval=5,
         eval_vs_random_games=30,
+        lr_decay_factor=0.98,
+        lr_min=1e-5,
     ):
         self.game_size = game_size
         self.num_iterations = num_iterations
@@ -335,10 +339,20 @@ class AlphaZeroTrainer:
 
         # External baseline evaluation (vs random) to guard against
         # non-transitive strategy cycles that Arena alone cannot detect.
-        # global_best.pt stores the model with the highest vs-random win rate ever seen.
+        # vs_random_best.pt stores the model with the highest vs-random win
+        # rate ever seen. NOTE: this is independent of Arena; it may contain
+        # a model that was rejected by Arena (because Arena compares to the
+        # previous best, not to any fixed external baseline).
         self.eval_vs_random_interval = eval_vs_random_interval
         self.eval_vs_random_games = eval_vs_random_games
         self.global_best_win_rate = 0.0
+
+        # LR decay: multiply LR by this factor per AlphaZero iteration.
+        # Applied BETWEEN iterations (not within batches), so Adam's
+        # momentum state stays consistent with the LR within each call.
+        self.lr_decay_factor = lr_decay_factor
+        self.lr_min = lr_min
+        self._iteration_count = 0
 
         # Arena parameters
         self.arena_games = arena_games
@@ -593,6 +607,21 @@ class AlphaZeroTrainer:
             f"iterations | {self.num_epochs} epochs × {batches_per_epoch} batches = {total_batches} total"
         )
 
+        # Compute current effective learning rate using per-iteration step decay.
+        # We use a decay PER AlphaZero iteration (not per batch), so Adam's
+        # momentum stays consistent with the LR within a single train_network
+        # call. Per-batch schedules like CosineAnnealing conflict with Adam
+        # because Adam's m/v state accumulates based on LR history.
+        current_lr = self.lr * (self.lr_decay_factor ** self._iteration_count)
+        current_lr = max(current_lr, self.lr_min)
+        for param_group in self.optimizer.param_groups:
+            param_group['lr'] = current_lr
+        print(
+            f"Learning rate this iteration: {current_lr:.6f} "
+            f"(base={self.lr}, decay={self.lr_decay_factor}^{self._iteration_count})"
+        )
+        self._iteration_count += 1
+
         self.model.train()
 
         total_policy_loss = 0.0
@@ -719,6 +748,7 @@ class AlphaZeroTrainer:
                 "accepted_count": accepted_count,
                 "rejected_count": rejected_count,
                 "global_best_win_rate": self.global_best_win_rate,
+                "lr_iteration_count": self._iteration_count,
             },
             checkpoint_file,
         )
@@ -749,6 +779,7 @@ class AlphaZeroTrainer:
         self._resumed_accepted_count = checkpoint.get("accepted_count", 0)
         self._resumed_rejected_count = checkpoint.get("rejected_count", 0)
         self.global_best_win_rate = checkpoint.get("global_best_win_rate", 0.0)
+        self._iteration_count = checkpoint.get("lr_iteration_count", 0)
 
         # Load sliding-window training history from sidecar .examples file
         examples_file = path + ".examples"
@@ -902,6 +933,36 @@ class AlphaZeroTrainer:
             candidate_state = {k: v.cpu() for k, v in self.model.state_dict().items()}
             torch.save(candidate_state, temp_path)
 
+            # Evaluate CANDIDATE vs Random BEFORE arena.
+            # This measures absolute strength of the just-trained model,
+            # independent of whether Arena accepts it. Arena only tells us
+            # "candidate vs previous best", which doesn't guarantee absolute
+            # improvement. vs-random is the only independent yardstick.
+            if (iteration + 1) % self.eval_vs_random_interval == 0:
+                print(f"Evaluating CANDIDATE vs random ({self.eval_vs_random_games} games)...")
+                wr_vs_random, w, l, d = self.evaluate_vs_random(
+                    num_games=self.eval_vs_random_games
+                )
+                print(
+                    f"Candidate vs random: {wr_vs_random * 100:.1f}% ({w}W / {l}L / {d}D) | "
+                    f"global best so far: {self.global_best_win_rate * 100:.1f}%"
+                )
+
+                if wr_vs_random > self.global_best_win_rate:
+                    old_rate = self.global_best_win_rate
+                    self.global_best_win_rate = wr_vs_random
+                    # Saved file name reflects its meaning: "the model with
+                    # the highest vs-random win rate ever observed". This is
+                    # INDEPENDENT of Arena — Arena may have rejected this
+                    # exact candidate. Use this file when you want "the
+                    # absolute best model by objective metric".
+                    vs_random_best_path = os.path.join(models_dir, "vs_random_best.pt")
+                    torch.save(candidate_state, vs_random_best_path)
+                    print(
+                        f"⭐ NEW vs_random BEST: {old_rate * 100:.1f}% -> {wr_vs_random * 100:.1f}% "
+                        f"(saved to {vs_random_best_path})"
+                    )
+
             # First iteration auto-accept (no best model to compare against)
             if best_model_state is None:
                 print("First iteration — auto-accepting model as best")
@@ -951,31 +1012,6 @@ class AlphaZeroTrainer:
                 print(
                     f"Iteration {iteration}: Accepted: {accepted_count}, Rejected: {rejected_count}"
                 )
-
-            # Evaluate vs Random player every N iterations to track absolute strength.
-            # This guards against non-transitive strategy cycles: Arena alone only
-            # compares against the previous best, which can lead to oscillating
-            # performance against a fixed external opponent.
-            if (iteration + 1) % self.eval_vs_random_interval == 0:
-                print(f"Evaluating vs random ({self.eval_vs_random_games} games)...")
-                wr_vs_random, w, l, d = self.evaluate_vs_random(
-                    num_games=self.eval_vs_random_games
-                )
-                print(
-                    f"vs random: {wr_vs_random * 100:.1f}% ({w}W / {l}L / {d}D) | "
-                    f"global best so far: {self.global_best_win_rate * 100:.1f}%"
-                )
-
-                if wr_vs_random > self.global_best_win_rate:
-                    old_rate = self.global_best_win_rate
-                    self.global_best_win_rate = wr_vs_random
-                    global_best_path = os.path.join(models_dir, "global_best.pt")
-                    current_state = {k: v.cpu() for k, v in self.model.state_dict().items()}
-                    torch.save(current_state, global_best_path)
-                    print(
-                        f"⭐ NEW GLOBAL BEST: {old_rate * 100:.1f}% -> {wr_vs_random * 100:.1f}% "
-                        f"(saved to {global_best_path})"
-                    )
 
             # Plot metrics
             if (iteration + 1) % 5 == 0 or iteration == end_iteration - 1:
