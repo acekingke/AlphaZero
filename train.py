@@ -261,7 +261,7 @@ class AlphaZeroTrainer:
         temperature=0.8,
         c_puct=2.0,
         batch_size=64,
-        num_epochs=10,
+        num_epochs=2,
         lr=0.001,
         checkpoint_path="./models/checkpoint",
         use_mps=True,
@@ -550,6 +550,11 @@ class AlphaZeroTrainer:
         """
         Train the neural network on the provided examples.
 
+        Performs `num_epochs` full passes over the entire sliding-window data
+        pool, with each epoch shuffling the data and training in mini-batches.
+        This is the standard AlphaZero training loop and matches
+        alpha-zero-general's behavior.
+
         Args:
             examples: List of (state, policy, value) tuples for the current iteration
         """
@@ -572,61 +577,62 @@ class AlphaZeroTrainer:
             )
             return 0.0, 0.0, 0.0
 
+        # Pre-convert to tensors once (outside the epoch loop) to avoid
+        # repeated numpy→torch conversion overhead.
+        states_arr, policies_arr, values_arr = zip(*all_examples)
+        all_states = torch.FloatTensor(np.array(states_arr)).to(self.device)
+        all_policies = torch.FloatTensor(np.array(policies_arr)).to(self.device)
+        all_values = torch.FloatTensor(np.array(values_arr).reshape(-1, 1)).to(self.device)
+
+        n = len(all_examples)
+        batches_per_epoch = (n + self.batch_size - 1) // self.batch_size
+        total_batches = batches_per_epoch * self.num_epochs
+
         print(
-            f"Training pool: {len(all_examples)} samples from {len(self.train_examples_history)} iterations"
+            f"Training pool: {n} samples from {len(self.train_examples_history)} "
+            f"iterations | {self.num_epochs} epochs × {batches_per_epoch} batches = {total_batches} total"
         )
 
-        # Sample mini_batch from the entire pool
-        mini_batch = random.sample(
-            all_examples, min(len(all_examples), self.batch_size * self.num_epochs)
-        )
-
-        # Split data
-        states, policies, values = zip(*mini_batch)
-
-        states = torch.FloatTensor(np.array(states)).to(self.device)
-        policies = torch.FloatTensor(np.array(policies)).to(self.device)
-        values = torch.FloatTensor(np.array(values).reshape(-1, 1)).to(self.device)
-
-        # Training loop
         self.model.train()
 
-        epoch_policy_loss = 0
-        epoch_value_loss = 0
-        epoch_total_loss = 0
+        total_policy_loss = 0.0
+        total_value_loss = 0.0
+        total_combined_loss = 0.0
 
-        # Split into batches
-        for i in range(0, len(mini_batch), self.batch_size):
-            batch_states = states[i : i + self.batch_size]
-            batch_policies = policies[i : i + self.batch_size]
-            batch_values = values[i : i + self.batch_size]
+        for epoch in range(self.num_epochs):
+            # Shuffle indices for this epoch
+            perm = torch.randperm(n, device=self.device)
 
-            # Forward pass
-            policy_logits, value_pred = self.model(batch_states)
+            for batch_start in range(0, n, self.batch_size):
+                batch_idx = perm[batch_start : batch_start + self.batch_size]
+                batch_states = all_states[batch_idx]
+                batch_policies = all_policies[batch_idx]
+                batch_values = all_values[batch_idx]
 
-            # Calculate loss (following AlphaZero paper exactly)
-            policy_loss = -torch.sum(
-                batch_policies * torch.log_softmax(policy_logits, dim=1)
-            ) / batch_states.size(0)
-            value_loss = nn.MSELoss()(value_pred, batch_values)
+                # Forward pass
+                policy_logits, value_pred = self.model(batch_states)
 
-            # L2 regularization is handled by Adam's weight_decay parameter
-            total_loss = value_loss + policy_loss
+                # Calculate loss (following AlphaZero paper exactly)
+                policy_loss = -torch.sum(
+                    batch_policies * torch.log_softmax(policy_logits, dim=1)
+                ) / batch_states.size(0)
+                value_loss = nn.MSELoss()(value_pred, batch_values)
 
-            # Backward pass and optimization
-            self.optimizer.zero_grad()
-            total_loss.backward()
-            self.optimizer.step()
+                # L2 regularization is handled by Adam's weight_decay parameter
+                combined_loss = value_loss + policy_loss
 
-            epoch_policy_loss += policy_loss.item()
-            epoch_value_loss += value_loss.item()
-            epoch_total_loss += total_loss.item()
+                # Backward pass and optimization
+                self.optimizer.zero_grad()
+                combined_loss.backward()
+                self.optimizer.step()
 
-        # Calculate average loss
-        num_batches = (len(mini_batch) + self.batch_size - 1) // self.batch_size
-        avg_policy_loss = epoch_policy_loss / num_batches
-        avg_value_loss = epoch_value_loss / num_batches
-        avg_total_loss = epoch_total_loss / num_batches
+                total_policy_loss += policy_loss.item()
+                total_value_loss += value_loss.item()
+                total_combined_loss += combined_loss.item()
+
+        avg_policy_loss = total_policy_loss / total_batches
+        avg_value_loss = total_value_loss / total_batches
+        avg_total_loss = total_combined_loss / total_batches
 
         # Record metrics
         self.policy_losses.append(avg_policy_loss)
