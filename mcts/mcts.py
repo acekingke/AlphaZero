@@ -23,23 +23,36 @@ class Node:
         return self.value_sum / self.visit_count
     
     def select_child(self, c_puct):
-        """Select a child according to the UCB formula."""
+        """Select a child according to the PUCT formula.
+
+        PUCT: score = Q(s,a) + c_puct * P(s,a) * sqrt(N(s)) / (1 + N(s,a))
+
+        where N(s) is the parent's visit count. On the very first simulation
+        when no children have been visited yet, using sum_of_children_visits
+        would give sqrt(0) = 0, completely zeroing the exploration term and
+        picking the lowest-indexed action deterministically. We use max(1,
+        sum_visits) to ensure the exploration term is non-zero on the first
+        visit, so priors (including Dirichlet noise) actually bias the initial
+        selection. This matches the intent of the AlphaZero paper which uses
+        sqrt(parent_N) where parent_N >= 1 whenever we're selecting.
+        """
         best_score = -float('inf')
         best_action = -1
-        
-        # Sum of all visit counts of direct children
+
+        # Parent's visit count (proxy: sum of children visits).
+        # max(1, ...) ensures exploration term is nonzero on first pass.
         sum_visits = sum(child.visit_count for child in self.children.values())
-        
+        sqrt_parent_visits = math.sqrt(max(1, sum_visits))
+
         for action, child in self.children.items():
-            # UCB score calculation
-            u = c_puct * child.prior * math.sqrt(sum_visits) / (1 + child.visit_count)
+            u = c_puct * child.prior * sqrt_parent_visits / (1 + child.visit_count)
             q = child.value()
             score = q + u
-            
+
             if score > best_score:
                 best_score = score
                 best_action = action
-        
+
         return best_action
     
     def expand(self, state, policy):

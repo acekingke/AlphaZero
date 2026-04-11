@@ -701,6 +701,13 @@ class AlphaZeroTrainer:
         # Import locally to avoid circular imports at module load
         from play import RandomPlayer
 
+        # Round num_games down to even for fair color split (half Black, half White)
+        if num_games % 2 != 0:
+            num_games -= 1
+            print(
+                f"Warning: num_games rounded down to {num_games} for fair color split"
+            )
+
         self.model.eval()
         mcts = MCTS(
             self.model,
@@ -831,7 +838,10 @@ class AlphaZeroTrainer:
                 elapsed_time=0,
             )
 
-        return checkpoint.get("iteration", 0)
+        # Return the NEXT iteration to run (saved iteration + 1), not the
+        # already-completed one. Otherwise resume re-runs the last completed
+        # iteration redundantly.
+        return checkpoint.get("iteration", -1) + 1
 
     def plot_metrics(self):
         """Plot training metrics."""
