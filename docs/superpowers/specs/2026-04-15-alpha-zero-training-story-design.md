@@ -148,13 +148,28 @@
    - `s = board.tostring()`
    - 单行独立成段，配一句"这一行，就是区别所在。"
 
-## 素材盘点（需要在写作时确认或补齐的数据）
+## 素材盘点
 
-- [ ] v1/v3/v4/v20 各自的 vs random 胜率曲线数据是否都还能找到
-- [ ] 诊断实验的 43% / 7% 数字是否能复核（脚本在 `scripts/exp_pure_policy_vs_random.py` 和 `scripts/exp_mcts_reuse_vs_random.py`）
-- [ ] `num_epochs` 的新旧实现代码可直接从 git 历史对比
-- [ ] `training-debug-playbook.md` 里"MCTS 结构性 Bug：树 vs 字典"一节的素材可以复用
-- [ ] v20 第 8 轮 100% 的那次 Arena log 最好能保留原始输出作为引用
+**原始训练 log 已不存在**，但关键数值都能在以下两类来源里找到：
+
+- **记忆文件**（`~/.claude/projects/-Users-kyc-homework-tmp-AlphaZero/memory/`）：
+  - `project_v4_training.md` —— v4 配置、40 轮各阶段 accept/reject 分布、最终 vs random 22%
+  - `project_mcts_tree_reuse.md` —— 树 vs 字典的复盘、v20 第 8 轮 100% 的记录、诊断脚本路径
+  - `project_num_epochs_bug.md` —— num_epochs 语义的前后对比
+  - `feedback_training_debug.md` —— "loss ≠ 能力" 的教训总结
+- **项目内 md 文档**（`docs/`）：
+  - `training-debug-playbook.md` —— 1026 行，包含"MCTS 结构性 Bug：树 vs 字典"完整复盘、12 条 debug 技巧、uniform trap 分析
+  - `alpha-zero-general-alignment.md` —— 和 reference 实现的逐项对齐
+  - `network-depth-receptive-field.md` —— 网络容量实验的记录
+  - `batch-epoch-iteration-explained.md` —— batch/epoch/iteration 概念辨析
+
+**写作时应当交叉核对这两类来源，当数值之间有冲突时以 `training-debug-playbook.md` 为准**（它是最系统化的复盘文档）。
+
+**四张图由本文作者（写作期间）产出**，不依赖原始训练 log：
+- 图 1（vs random 演进曲线）：用 memory 里的数值手动重绘（v1 ~5% / v3 8% / v4 22% / v20 第 8 轮 100%），不追求真实训练曲线的波动细节，只保留关键拐点
+- 图 2（loss 完美 vs 胜率 5% 双面图）：示意性，loss 曲线画"光滑下降"样板即可
+- 图 3（诊断实验柱状图）：两个柱子 43% / 7%，数值直接引用 memory 记录
+- 图 4（树 vs 字典示意图）：纯概念图，可先用 mermaid 或 excalidraw 出草稿，正式稿可转手绘风
 
 ## 成功标准
 
