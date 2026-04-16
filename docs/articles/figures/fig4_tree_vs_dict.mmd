@@ -1,0 +1,24 @@
+%%{init: {'theme':'default'}}%%
+flowchart LR
+    subgraph TREE["树实现：同一局面 S 被拆成两个节点"]
+        direction TB
+        T0["Root"]
+        T0 -->|"a"| Ta["Node_A"]
+        T0 -->|"b"| Tb["Node_B"]
+        Ta -->|"b"| Tab["S（N=1）"]
+        Tb -->|"a"| Tba["S（N=1）"]
+    end
+
+    subgraph DICT["字典实现：同一局面 S 只有一个条目"]
+        direction TB
+        D0["Root"]
+        D0 -->|"a"| Da["Node_A"]
+        D0 -->|"b"| Db["Node_B"]
+        Da -->|"b"| DS["S（N=2）"]
+        Db -->|"a"| DS
+    end
+
+    classDef duplicated fill:#f4cccc,stroke:#cc0000;
+    classDef merged fill:#d9ead3,stroke:#38761d;
+    class Tab,Tba duplicated;
+    class DS merged;

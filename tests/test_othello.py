@@ -76,9 +76,9 @@ class TestOthelloBoard(unittest.TestCase):
         valid_moves = board.get_valid_moves()
         self.assertGreater(len(valid_moves), 0)
 
-        # Attempt to pass turn when valid moves are available
-        with self.assertRaises(ValueError):  # Assuming pass_turn raises ValueError
-            board.pass_turn()
+        # Attempt to pass turn when valid moves are available — should be rejected
+        result = board.pass_turn()
+        self.assertFalse(result)
 
         # Manually set up a state where no valid moves are available
         board.board = np.array([

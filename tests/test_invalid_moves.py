@@ -40,7 +40,7 @@ class TestInvalidMoveHandling:
         
         # 执行MCTS搜索
         canonical_state = self.env.board.get_canonical_state()
-        state = self.mcts._canonical_to_observation(canonical_state, self.env)
+        state = self.mcts.canonical_to_observation(canonical_state, self.env)
         action_probs = self.mcts.search(state, self.env, temperature=1.0)
         
         print(f"Action probabilities: {action_probs}")
@@ -89,7 +89,7 @@ class TestInvalidMoveHandling:
                 
                 # 使用MCTS选择动作
                 canonical_state = self.env.board.get_canonical_state()
-                state = self.mcts._canonical_to_observation(canonical_state, self.env)
+                state = self.mcts.canonical_to_observation(canonical_state, self.env)
                 action_probs = self.mcts.search(state, self.env, temperature=1.0)
                 
                 # 确保只有有效动作有概率
@@ -174,7 +174,7 @@ class TestInvalidMoveHandling:
         
         # 执行搜索
         canonical_state = self.env.board.get_canonical_state()
-        state = mcts._canonical_to_observation(canonical_state, self.env)
+        state = mcts.canonical_to_observation(canonical_state, self.env)
         
         try:
             action_probs = mcts.search(state, self.env, temperature=1.0)
@@ -218,7 +218,7 @@ class TestSelfPlayInvalidMoveProtection:
             while not env.board.is_done() and step < 100:  # 防止无限循环
                 # 使用canonical state保持一致性
                 canonical_state = env.board.get_canonical_state()
-                state = mcts._canonical_to_observation(canonical_state, env)
+                state = mcts.canonical_to_observation(canonical_state, env)
                 
                 try:
                     action_probs = mcts.search(state, env, temperature=1.0, add_noise=True)

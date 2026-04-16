@@ -49,16 +49,20 @@ class HumanPlayer(OthelloPlayer):
 class AlphaZeroPlayer(OthelloPlayer):
     """Player that uses the trained AlphaZero model."""
 
-    def __init__(self, model_path, num_simulations=800, c_puct=2.0, use_mps=True):
-        # Get best available device
+    def __init__(self, model_path_or_model, num_simulations=800, c_puct=2.0, use_mps=True):
         self.device = get_device(use_mps=use_mps)
         print(f"Using device: {self.device} for AlphaZero player")
 
-        self.model = AlphaZeroNetwork(game_size=6, device=self.device)
-
-        # Load the trained model
-        checkpoint = torch.load(model_path, map_location=self.device)
-        self.model.load_state_dict(checkpoint["model_state_dict"])
+        if isinstance(model_path_or_model, AlphaZeroNetwork):
+            # Accept a pre-loaded model object directly
+            self.model = model_path_or_model
+        else:
+            self.model = AlphaZeroNetwork(game_size=6, device=self.device)
+            checkpoint = torch.load(model_path_or_model, map_location=self.device)
+            if isinstance(checkpoint, dict) and "model_state_dict" in checkpoint:
+                self.model.load_state_dict(checkpoint["model_state_dict"])
+            else:
+                self.model.load_state_dict(checkpoint)
         self.model.to(self.device)
         self.model.eval()
 
@@ -69,7 +73,7 @@ class AlphaZeroPlayer(OthelloPlayer):
         # Use canonical state for consistency with training
         canonical_state = env.board.get_canonical_state()
         # Convert to observation format (consistent with MCTS internal conversion)
-        state = self.mcts._canonical_to_observation(canonical_state, env)
+        state = self.mcts.canonical_to_observation(canonical_state, env)
 
         # Use MCTS to get action probabilities
         action_probs = self.mcts.search(state, env, temperature=0.1)

@@ -240,3 +240,10 @@ $$\mathcal{L}_{\text{total}} = \mathcal{L}_{\text{policy}} + \mathcal{L}_{\text{
 ## 许可证
 
 MIT
+
+
+## 运行
+
+```bash
+python gui_play.py --mcts_simulations 150 --c_puct 2.5
+```

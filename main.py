@@ -3,7 +3,6 @@ import os
 import torch
 
 from train import AlphaZeroTrainer
-from play import main as play_main
 from evaluate import evaluate_model, compare_models
 from utils.device import check_mps_availability
 
@@ -23,13 +22,22 @@ def main():
     train_parser.add_argument('--temperature', type=float, default=0.8, help='Temperature parameter for MCTS action selection (higher = more exploration)')
     train_parser.add_argument('--c_puct', type=float, default=1.0, help='c_puct value for MCTS (exploration constant)')
     train_parser.add_argument('--batch_size', type=int, default=128, help='Batch size for training')
-    train_parser.add_argument('--l2_regularization', type=float, default=1e-4, help='L2 regularization coefficient (c in AlphaZero paper)')
+    train_parser.add_argument('--num_epochs', type=int, default=2, help='Number of true epochs over the entire data pool per iteration (default: 2). Each epoch shuffles and trains on all retained samples.')
+    train_parser.add_argument('--lr', type=float, default=0.001, help='Learning rate for Adam optimizer (default: 0.001)')
     train_parser.add_argument('--resume', type=str, help='Path to checkpoint to resume training from')
     train_parser.add_argument('--use_mps', action='store_true', help='Use MPS acceleration on macOS if available')
     train_parser.add_argument('--use_cpu', action='store_true', help='Force use CPU even if GPU is available')
     train_parser.add_argument('--use_multiprocessing', action='store_true', help='Use multiprocessing for self-play')
     train_parser.add_argument('--mp_num_workers', type=int, default=None, help='Number of worker processes for multiprocessing')
     train_parser.add_argument('--mp_games_per_worker', type=int, default=1, help='Number of self-play games each worker runs per task')
+    train_parser.add_argument('--dirichlet_alpha', type=float, default=0.3, help='Dirichlet noise alpha parameter (higher = more uniform noise)')
+    train_parser.add_argument('--dirichlet_weight', type=float, default=0.25, help='Dirichlet noise weight (higher = more exploration)')
+    train_parser.add_argument('--arena_games', type=int, default=40, help='Number of arena games per evaluation (default: 40)')
+    train_parser.add_argument('--arena_threshold', type=float, default=0.6, help='Win rate threshold for accepting new model (default: 0.6)')
+    train_parser.add_argument('--arena_mcts_simulations', type=int, default=25, help='Number of MCTS simulations per move in arena (default: 25)')
+    train_parser.add_argument('--temp_threshold', type=int, default=15, help='Move count after which temperature drops to 0 (default: 15, AlphaGo Zero style)')
+    train_parser.add_argument('--eval_vs_random_interval', type=int, default=5, help='Evaluate vs random every N iterations (default: 5)')
+    train_parser.add_argument('--eval_vs_random_games', type=int, default=30, help='Number of games for vs-random evaluation (default: 30)')
     
     # Play command
     play_parser = subparsers.add_parser('play', help='Play against the trained model')
@@ -68,25 +76,41 @@ def main():
             temperature=args.temperature,
             c_puct=args.c_puct,
             batch_size=args.batch_size,
-            l2_regularization=args.l2_regularization,
+            num_epochs=args.num_epochs,
+            lr=args.lr,
             use_mps=args.use_mps,
             use_cuda=not args.use_cpu,
             use_multiprocessing=args.use_multiprocessing,
             mp_num_workers=args.mp_num_workers,
-            mp_games_per_worker=args.mp_games_per_worker
+            mp_games_per_worker=args.mp_games_per_worker,
+            dirichlet_alpha=args.dirichlet_alpha,
+            dirichlet_weight=args.dirichlet_weight,
+            arena_games=args.arena_games,
+            arena_threshold=args.arena_threshold,
+            arena_mcts_simulations=args.arena_mcts_simulations,
+            temp_threshold=args.temp_threshold,
+            eval_vs_random_interval=args.eval_vs_random_interval,
+            eval_vs_random_games=args.eval_vs_random_games,
         )
         trainer.train(resume_from=args.resume)
     
     elif args.command == 'play':
-        # Call play function from play.py
-        import sys
-        sys.argv = [
-            sys.argv[0],
-            '--model', args.model,
-            '--player_color', args.player_color,
-            '--mcts_simulations', str(args.mcts_simulations)
-        ]
-        play_main()
+        from play import AlphaZeroPlayer, HumanPlayer, play_game
+        alphazero_player = AlphaZeroPlayer(
+            args.model,
+            num_simulations=args.mcts_simulations,
+            use_mps=args.use_mps,
+        )
+        human_player = HumanPlayer()
+        if args.player_color.lower() == 'black':
+            black_player = human_player
+            white_player = alphazero_player
+            print("You are playing as Black (B)")
+        else:
+            black_player = alphazero_player
+            white_player = human_player
+            print("You are playing as White (W)")
+        play_game(black_player, white_player)
     
     elif args.command == 'evaluate':
         # Evaluate the model

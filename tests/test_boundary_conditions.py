@@ -54,32 +54,10 @@ class TestMCTSBoundaryConditions:
         assert not np.any(np.isnan(action_probs))
         assert not np.any(np.isinf(action_probs))
     
-    def test_action_probability_empty_children(self):
-        """测试空children的情况"""
-        root = Node(0)
-        action_probs = self.mcts._get_action_probabilities(root, 1.0, self.env)
-        
-        # 应该返回全零数组
-        assert len(action_probs) == self.game_size * self.game_size + 1
-        assert np.sum(action_probs) == 0
-    
-    def test_action_probability_negative_actions(self):
-        """测试负数action的处理"""
-        root = Node(0)
-        root.children = {
-            -1: Node(0.5),
-            -10: Node(0.3),
-            0: Node(0.2),
-        }
-        
-        for child in root.children.values():
-            child.visit_count = 1
-        
-        action_probs = self.mcts._get_action_probabilities(root, 1.0, self.env)
-        
-        # 只有有效的action应该有概率
-        assert action_probs[0] > 0  # action 0 应该有概率
-        assert np.sum(action_probs) > 0
+# Removed tests (2026-04-14) — `_get_action_probabilities` signature and
+# Node-based tree internals no longer exist after the dict-based MCTS rewrite.
+# Equivalent behaviour is covered by tests/test_state_consistency.py via the
+# public search() API.
 
 
 class TestOthelloBoundaryConditions:

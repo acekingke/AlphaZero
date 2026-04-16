@@ -1,10 +1,11 @@
 import os
+import pickle
 import torch
 import torch.nn as nn
 import torch.optim as optim
 import numpy as np
 from tqdm import tqdm
-from collections import deque, defaultdict
+from collections import defaultdict
 import random
 import time
 import matplotlib.pyplot as plt
@@ -28,6 +29,7 @@ def _worker_init(
     temperature,
     dirichlet_alpha,
     dirichlet_weight,
+    temp_threshold,
 ):
     """Worker process initializer that runs once per worker process."""
     import torch
@@ -45,6 +47,7 @@ def _worker_init(
     global WORKER_TEMPERATURE
     global WORKER_DIRICHLET_ALPHA
     global WORKER_DIRICHLET_WEIGHT
+    global WORKER_TEMP_THRESHOLD
 
     WORKER_MODEL = AlphaZeroNetwork(game_size, device="cpu")
     WORKER_MODEL.load_state_dict(state_dict)
@@ -58,6 +61,7 @@ def _worker_init(
     WORKER_TEMPERATURE = temperature
     WORKER_DIRICHLET_ALPHA = dirichlet_alpha
     WORKER_DIRICHLET_WEIGHT = dirichlet_weight
+    WORKER_TEMP_THRESHOLD = temp_threshold
 
 
 def _worker_play(seed_and_count):
@@ -98,15 +102,20 @@ def _worker_play(seed_and_count):
         game_start_time = time.time()
 
         while not env.board.is_done():
+            # Segmented temperature: explore early, exploit late.
+            # Mirrors alpha-zero-general's tempThreshold mechanism.
+            current_temp = WORKER_TEMPERATURE if step < WORKER_TEMP_THRESHOLD else 0.0
+
             # Use canonical state for consistency with MCTS
             canonical_state = env.board.get_canonical_state()
             # Convert to observation format for neural network (consistent with MCTS)
-            state = mcts._canonical_to_observation(canonical_state, env)
-            action_probs = mcts.search(state, env, WORKER_TEMPERATURE, add_noise=True)
+            state = mcts.canonical_to_observation(canonical_state, env)
+            action_probs = mcts.search(state, env, current_temp, add_noise=True)
             # Save state, the pi (policy) returned by MCTS, and the player who made the move
             game_history.append((state, action_probs, env.board.current_player))
             action = np.random.choice(len(action_probs), p=action_probs)
             _, reward, done, _ = env.step(action)
+            mcts.advance_root(action)
             step += 1
             if done:
                 break
@@ -144,6 +153,117 @@ def _worker_play(seed_and_count):
     return results, seed, count, game_stats, worker_id
 
 
+class Arena:
+    """Arena for evaluating two models against each other."""
+
+    def __init__(self, game_size=6, num_games=40, mcts_simulations=25, c_puct=2.0):
+        self.game_size = game_size
+        self.num_games = num_games
+        self.mcts_simulations = mcts_simulations
+        self.c_puct = c_puct
+
+    def play_single_game(self, env, mcts1, mcts2, model1_is_black):
+        """Play a single game between two MCTS agents.
+
+        Args:
+            env: OthelloEnv instance (already reset)
+            mcts1: MCTS instance for model 1
+            mcts2: MCTS instance for model 2
+            model1_is_black: if True, model1 plays as Black (-1)
+
+        Returns:
+            1 if model1 wins, 2 if model2 wins, 0 if draw
+        """
+        # Black is -1, White is 1
+        if model1_is_black:
+            player_map = {-1: mcts1, 1: mcts2}
+        else:
+            player_map = {-1: mcts2, 1: mcts1}
+
+        while not env.board.is_done():
+            current_player = env.board.current_player
+            mcts = player_map[current_player]
+
+            canonical_state = env.board.get_canonical_state()
+            state = mcts.canonical_to_observation(canonical_state, env)
+            # temperature=0 triggers random tie-breaking inside MCTS
+            # (see mcts/mcts.py _get_action_probabilities).
+            action_probs = mcts.search(state, env, temperature=0, add_noise=False)
+            action = int(np.argmax(action_probs))  # action_probs is already one-hot after tie-break
+
+            _, _, done, _ = env.step(action)
+            # Advance BOTH MCTS trees: each tracks the full game state from its own view.
+            mcts1.advance_root(action)
+            mcts2.advance_root(action)
+            if done:
+                break
+
+        winner = env.board.get_winner()
+        if winner == 0:
+            return 0  # draw
+
+        # Map board winner to model number
+        if model1_is_black:
+            return 1 if winner == -1 else 2
+        else:
+            return 1 if winner == 1 else 2
+
+    def play_games(self, model1_state_dict, model2_state_dict):
+        """Play arena games between two models.
+
+        Args:
+            model1_state_dict: state dict for model 1 (candidate)
+            model2_state_dict: state dict for model 2 (best)
+
+        Returns:
+            (model1_wins, model2_wins, draws)
+        """
+        model1 = AlphaZeroNetwork(self.game_size, device="cpu")
+        model1.load_state_dict(model1_state_dict)
+        model1.to("cpu")
+        model1.eval()
+
+        model2 = AlphaZeroNetwork(self.game_size, device="cpu")
+        model2.load_state_dict(model2_state_dict)
+        model2.to("cpu")
+        model2.eval()
+
+        mcts1 = MCTS(model1, c_puct=self.c_puct, num_simulations=self.mcts_simulations)
+        mcts2 = MCTS(model2, c_puct=self.c_puct, num_simulations=self.mcts_simulations)
+
+        model1_wins = 0
+        model2_wins = 0
+        draws = 0
+
+        half = self.num_games // 2
+
+        for game_idx in range(self.num_games):
+            env = OthelloEnv(size=self.game_size)
+            env.reset()
+
+            # NOTE: we deliberately do NOT reset mcts1/mcts2 trees between games.
+            # Matches alpha-zero-general Coach.py:111-118 behavior where pmcts/nmcts
+            # are created once per arena session and accumulate stats across all 40
+            # games. Common opening positions get visited thousands of times across
+            # the session, giving effectively deep search despite low per-move sims.
+            # The tree root auto-resets to None inside search() via the staleness
+            # check when env doesn't match, so new games start fresh at the root
+            # level but still benefit from cached subtrees encountered later.
+
+            # First half: model1 plays as Black; second half: model1 plays as White
+            model1_is_black = game_idx < half
+
+            result = self.play_single_game(env, mcts1, mcts2, model1_is_black)
+            if result == 1:
+                model1_wins += 1
+            elif result == 2:
+                model2_wins += 1
+            else:
+                draws += 1
+
+        return model1_wins, model2_wins, draws
+
+
 class AlphaZeroTrainer:
     """Trainer for AlphaZero."""
 
@@ -156,9 +276,8 @@ class AlphaZeroTrainer:
         temperature=0.8,
         c_puct=2.0,
         batch_size=64,
-        num_epochs=100,
+        num_epochs=2,
         lr=0.001,
-        l2_regularization=1e-4,  # L2 regularization coefficient (c in paper)
         checkpoint_path="./models/checkpoint",
         use_mps=True,
         use_cuda=True,
@@ -168,6 +287,12 @@ class AlphaZeroTrainer:
         mp_games_per_worker=1,
         dirichlet_alpha=0.3,
         dirichlet_weight=0.25,
+        arena_games=40,
+        arena_threshold=0.6,
+        arena_mcts_simulations=25,
+        temp_threshold=15,
+        eval_vs_random_interval=5,
+        eval_vs_random_games=30,
     ):
         self.game_size = game_size
         self.num_iterations = num_iterations
@@ -177,8 +302,6 @@ class AlphaZeroTrainer:
         self.c_puct = c_puct
         self.batch_size = batch_size
         self.num_epochs = num_epochs
-        self.lr = lr
-        self.l2_regularization = l2_regularization  # L2 regularization coefficient
         self.checkpoint_path = checkpoint_path
         self.log_dir = log_dir
 
@@ -188,6 +311,21 @@ class AlphaZeroTrainer:
         # Create log directory if it doesn't exist
         os.makedirs(log_dir, exist_ok=True)
 
+        # Validate critical parameters that would cause crashes or
+        # incorrect behavior if misconfigured.
+        if num_epochs < 1:
+            raise ValueError(f"num_epochs must be >= 1, got {num_epochs}")
+        if eval_vs_random_interval < 1:
+            raise ValueError(
+                f"eval_vs_random_interval must be >= 1, got {eval_vs_random_interval}"
+            )
+        if batch_size < 1:
+            raise ValueError(f"batch_size must be >= 1, got {batch_size}")
+        if arena_games < 2 or arena_games % 2 != 0:
+            raise ValueError(
+                f"arena_games must be even and >= 2, got {arena_games}"
+            )
+
         # Get the best available device (CUDA, MPS, or CPU)
         self.device = get_device(use_mps=use_mps, use_cuda=use_cuda)
         print(f"Training will use: {self.device}")
@@ -195,12 +333,17 @@ class AlphaZeroTrainer:
         # Initialize neural network
         self.model = AlphaZeroNetwork(game_size, device=self.device)
         self.model.to(self.device)
-        self.optimizer = optim.Adam(self.model.parameters(), lr=lr, weight_decay=1e-4)
+        # NOTE: optimizer is created FRESH each iteration in train_network(),
+        # matching alpha-zero-general's NNet.train() which does:
+        #   optimizer = optim.Adam(self.nnet.parameters())
+        # No persistent optimizer, no weight_decay, no LR scheduling.
 
-        # Experience buffer - stores about 50 iterations worth of data
-        # Each iteration: ~1000 games * ~32 states/game * 6 augmentations = ~192000 examples
-        # 50 iterations = ~9600000 examples
-        self.buffer = deque(maxlen=10000000)  # 10M samples
+        # Sliding window training data (per-iteration history).
+        # Keeps the most recent N iterations of self-play data, discarding older
+        # ones to avoid training on stale labels from weak earlier models.
+        # Reference: AlphaGo Zero (Nature 2017) Methods - "most recent 500K games"
+        self.train_examples_history = []  # list of lists, one per iteration
+        self.num_iters_for_history = 20
 
         # Training metrics
         self.policy_losses = []
@@ -218,6 +361,24 @@ class AlphaZeroTrainer:
         # Dirichlet noise parameters for MCTS root mixing
         self.dirichlet_alpha = dirichlet_alpha
         self.dirichlet_weight = dirichlet_weight
+
+        # Segmented temperature: temp=temperature for first temp_threshold moves, then temp=0
+        self.temp_threshold = temp_threshold
+
+        # External baseline evaluation (vs random) to guard against
+        # non-transitive strategy cycles that Arena alone cannot detect.
+        # vs_random_best.pt stores the model with the highest vs-random win
+        # rate ever seen. NOTE: this is independent of Arena; it may contain
+        # a model that was rejected by Arena (because Arena compares to the
+        # previous best, not to any fixed external baseline).
+        self.eval_vs_random_interval = eval_vs_random_interval
+        self.eval_vs_random_games = eval_vs_random_games
+        self.global_best_win_rate = 0.0
+
+        # Arena parameters
+        self.arena_games = arena_games
+        self.arena_threshold = arena_threshold
+        self.arena_mcts_simulations = arena_mcts_simulations
 
     def self_play(self):
         """
@@ -248,13 +409,15 @@ class AlphaZeroTrainer:
             game_history = []
             step = 0
 
-            # Use fixed temperature throughout the game
+            # Segmented temperature: temp=self.temperature for first temp_threshold moves, then temp=0
             while not env.board.is_done():
+                current_temp = self.temperature if step < self.temp_threshold else 0.0
+
                 # Use canonical state for consistency with MCTS
                 canonical_state = env.board.get_canonical_state()
                 # Convert to observation format for neural network (consistent with MCTS)
-                state = mcts._canonical_to_observation(canonical_state, env)
-                action_probs = mcts.search(state, env, self.temperature, add_noise=True)
+                state = mcts.canonical_to_observation(canonical_state, env)
+                action_probs = mcts.search(state, env, current_temp, add_noise=True)
 
                 # Save state, the pi (policy) returned by MCTS, and the player who made the move
                 # This ensures value labels are computed from the correct player's perspective
@@ -263,6 +426,7 @@ class AlphaZeroTrainer:
                 # Choose action based on the MCTS probabilities
                 action = np.random.choice(len(action_probs), p=action_probs)
                 _, reward, done, _ = env.step(action)
+                mcts.advance_root(action)
 
                 step += 1
 
@@ -345,6 +509,7 @@ class AlphaZeroTrainer:
                 self.temperature,
                 self.dirichlet_alpha,
                 self.dirichlet_weight,
+                self.temp_threshold,
             ),
         ) as pool:
             # Create main progress bar
@@ -421,76 +586,90 @@ class AlphaZeroTrainer:
         """
         Train the neural network on the provided examples.
 
+        Performs `num_epochs` full passes over the entire sliding-window data
+        pool, with each epoch shuffling the data and training in mini-batches.
+        This is the standard AlphaZero training loop and matches
+        alpha-zero-general's behavior.
+
         Args:
-            examples: List of (state, policy, value) tuples
+            examples: List of (state, policy, value) tuples for the current iteration
         """
-        # Add examples to buffer
-        self.buffer.extend(examples)
-
-        # If buffer doesn't have enough samples, don't train
-        if len(self.buffer) < self.batch_size:
+        # Sliding window: append this iteration's examples and drop oldest if needed
+        self.train_examples_history.append(examples)
+        if len(self.train_examples_history) > self.num_iters_for_history:
+            dropped = self.train_examples_history.pop(0)
             print(
-                f"Buffer has only {len(self.buffer)} samples, need at least {self.batch_size}. Skipping training."
+                f"Sliding window: dropped oldest iteration ({len(dropped)} samples), "
+                f"keeping {len(self.train_examples_history)} iterations"
             )
-            return 0.0, 0.0, 0.0  # Return zero losses when skipping training
 
-        # Extract data
-        mini_batch = random.sample(
-            self.buffer, min(len(self.buffer), self.batch_size * self.num_epochs)
+        # Flatten all retained iterations into a single training pool
+        all_examples = [e for iter_examples in self.train_examples_history for e in iter_examples]
+
+        # If pool doesn't have enough samples, don't train
+        if len(all_examples) < self.batch_size:
+            print(
+                f"Pool has only {len(all_examples)} samples, need at least {self.batch_size}. Skipping training."
+            )
+            return 0.0, 0.0, 0.0
+
+        # Prepare training data
+        states_arr, policies_arr, values_arr = zip(*all_examples)
+        boards = torch.FloatTensor(np.array(states_arr).astype(np.float64)).to(self.device)
+        target_pis = torch.FloatTensor(np.array(policies_arr)).to(self.device)
+        target_vs = torch.FloatTensor(np.array(values_arr).astype(np.float64)).to(self.device)
+
+        n = len(all_examples)
+        batch_count = int(n / self.batch_size)
+        total_batches = batch_count * self.num_epochs
+
+        print(
+            f"Training pool: {n} samples from {len(self.train_examples_history)} "
+            f"iterations | {self.num_epochs} epochs × {batch_count} batches = {total_batches} total"
         )
 
-        # Split data
-        states, policies, values = zip(*mini_batch)
+        # Fresh optimizer every iteration — matches alpha-zero-general exactly.
+        # No momentum carryover, no LR decay, no weight_decay.
+        optimizer = optim.Adam(self.model.parameters())
 
-        states = torch.FloatTensor(np.array(states)).to(self.device)
-        policies = torch.FloatTensor(np.array(policies)).to(self.device)
-        values = torch.FloatTensor(np.array(values).reshape(-1, 1)).to(self.device)
-
-        # Training loop
         self.model.train()
 
-        epoch_policy_loss = 0
-        epoch_value_loss = 0
-        epoch_total_loss = 0
+        total_policy_loss = 0.0
+        total_value_loss = 0.0
+        total_combined_loss = 0.0
 
-        # Split into batches
-        for i in range(0, len(mini_batch), self.batch_size):
-            batch_states = states[i : i + self.batch_size]
-            batch_policies = policies[i : i + self.batch_size]
-            batch_values = values[i : i + self.batch_size]
+        for epoch in range(self.num_epochs):
+            # Random sampling WITH replacement — matches alpha-zero-general:
+            #   sample_ids = np.random.randint(len(examples), size=args.batch_size)
+            for _ in range(batch_count):
+                sample_ids = np.random.randint(n, size=self.batch_size)
+                batch_boards = boards[sample_ids]
+                batch_pis = target_pis[sample_ids]
+                batch_vs = target_vs[sample_ids]
 
-            # Forward pass
-            policy_logits, value_pred = self.model(batch_states)
+                # Forward pass — model returns (log_softmax policy, tanh value)
+                out_pi, out_v = self.model(batch_boards)
 
-            # Calculate loss (following AlphaZero paper exactly)
-            policy_loss = -torch.sum(
-                batch_policies * torch.log_softmax(policy_logits, dim=1)
-            ) / batch_states.size(0)
-            value_loss = nn.MSELoss()(value_pred, batch_values)
+                # Loss — matches alpha-zero-general:
+                #   loss_pi = -sum(targets * log_probs) / N
+                #   loss_v  = sum((targets - preds)^2) / N
+                policy_loss = -torch.sum(batch_pis * out_pi) / batch_boards.size(0)
+                value_loss = torch.sum(
+                    (batch_vs - out_v.view(-1)) ** 2
+                ) / batch_boards.size(0)
+                combined_loss = policy_loss + value_loss
 
-            # Add L2 regularization term: c||θ||^2
-            l2_reg = 0
-            for param in self.model.parameters():
-                l2_reg += torch.norm(param) ** 2
-            l2_reg = self.l2_regularization * l2_reg
+                optimizer.zero_grad()
+                combined_loss.backward()
+                optimizer.step()
 
-            # Complete AlphaZero loss: L = (z-v)^2 - π^T log p + c||θ||^2
-            total_loss = value_loss + policy_loss + l2_reg
+                total_policy_loss += policy_loss.item()
+                total_value_loss += value_loss.item()
+                total_combined_loss += combined_loss.item()
 
-            # Backward pass and optimization
-            self.optimizer.zero_grad()
-            total_loss.backward()
-            self.optimizer.step()
-
-            epoch_policy_loss += policy_loss.item()
-            epoch_value_loss += value_loss.item()
-            epoch_total_loss += total_loss.item()
-
-        # Calculate average loss
-        num_batches = (len(mini_batch) + self.batch_size - 1) // self.batch_size
-        avg_policy_loss = epoch_policy_loss / num_batches
-        avg_value_loss = epoch_value_loss / num_batches
-        avg_total_loss = epoch_total_loss / num_batches
+        avg_policy_loss = total_policy_loss / total_batches if total_batches > 0 else 0
+        avg_value_loss = total_value_loss / total_batches if total_batches > 0 else 0
+        avg_total_loss = total_combined_loss / total_batches if total_batches > 0 else 0
 
         # Record metrics
         self.policy_losses.append(avg_policy_loss)
@@ -502,34 +681,165 @@ class AlphaZeroTrainer:
 
         return avg_policy_loss, avg_value_loss, avg_total_loss
 
-    def save_checkpoint(self, iteration):
-        """Save model checkpoint."""
-        # Use iteration number directly as checkpoint number (allow overwrite)
-        checkpoint_number = iteration
+    def evaluate_vs_random(self, num_games=30):
+        """Evaluate self.model vs RandomPlayer.
 
-        # Save checkpoint with current training state
-        torch.save(
-            {
-                "iteration": iteration,
-                "model_state_dict": self.model.state_dict(),
-                "optimizer_state_dict": self.optimizer.state_dict(),
-                "policy_losses": self.policy_losses,
-                "value_losses": self.value_losses,
-                "total_losses": self.total_losses,
-            },
-            f"{self.checkpoint_path}_{checkpoint_number}.pt",
+        Plays num_games games with colors split evenly (half as Black, half as White)
+        to eliminate first-mover bias. Uses temperature=0 (deterministic) and the
+        arena MCTS simulation budget for speed.
+
+        Returns:
+            (win_rate, wins, losses, draws)
+        """
+        # Import locally to avoid circular imports at module load
+        from play import RandomPlayer
+
+        # Round num_games down to even for fair color split (half Black, half White)
+        if num_games % 2 != 0:
+            num_games -= 1
+            print(
+                f"Warning: num_games rounded down to {num_games} for fair color split"
+            )
+
+        self.model.eval()
+        mcts = MCTS(
+            self.model,
+            c_puct=self.c_puct,
+            num_simulations=self.arena_mcts_simulations,
         )
+        random_player = RandomPlayer()
 
-        print(f"Saved checkpoint: {self.checkpoint_path}_{checkpoint_number}.pt")
+        wins = 0
+        losses = 0
+        draws = 0
+        half = num_games // 2
+
+        for game_idx in range(num_games):
+            env = OthelloEnv(size=self.game_size)
+            env.reset()
+            # Do NOT reset mcts tree between games — dict-based stats accumulate
+            # across the 30-game eval session, giving effectively deeper search.
+
+            # First half: model plays Black (-1); second half: White (+1)
+            model_player_id = -1 if game_idx < half else 1
+
+            while not env.board.is_done():
+                if env.board.current_player == model_player_id:
+                    canonical_state = env.board.get_canonical_state()
+                    state = mcts.canonical_to_observation(canonical_state, env)
+                    action_probs = mcts.search(
+                        state, env, temperature=0, add_noise=False
+                    )
+                    action = int(np.argmax(action_probs))
+                    # Fallback: if the argmax action is somehow invalid, pick any valid
+                    if env.get_valid_moves_mask()[action] == 0:
+                        valid = np.where(env.get_valid_moves_mask() == 1)[0]
+                        action = int(valid[0]) if len(valid) > 0 else env.board.get_action_space_size() - 1
+                else:
+                    action = random_player.get_action(env)
+
+                env.step(action)
+                mcts.advance_root(action)
+
+            winner = env.board.get_winner()
+            if winner == 0:
+                draws += 1
+            elif winner == model_player_id:
+                wins += 1
+            else:
+                losses += 1
+
+        win_rate = wins / num_games
+        return win_rate, wins, losses, draws
+
+    def _build_checkpoint_dict(self, iteration, accepted_count=0, rejected_count=0):
+        """Build the checkpoint data dict (shared by save methods)."""
+        return {
+            "iteration": iteration,
+            "model_state_dict": self.model.state_dict(),
+            "policy_losses": self.policy_losses,
+            "value_losses": self.value_losses,
+            "total_losses": self.total_losses,
+            "accepted_count": accepted_count,
+            "rejected_count": rejected_count,
+            "global_best_win_rate": self.global_best_win_rate,
+        }
+
+    def _save_training_examples(self, path):
+        """Save sliding-window training history to disk (like alpha-zero-general)."""
+        try:
+            with open(path, "wb") as f:
+                pickle.dump(self.train_examples_history, f)
+            print(
+                f"Saved training history: {path} "
+                f"({len(self.train_examples_history)} iterations)"
+            )
+        except Exception as e:
+            print(f"Warning: failed to save training history: {e}")
+
+    def save_checkpoint(self, iteration, accepted_count=0, rejected_count=0):
+        """Save model checkpoint for an accepted iteration."""
+        checkpoint_file = f"{self.checkpoint_path}_{iteration}.pt"
+        torch.save(
+            self._build_checkpoint_dict(iteration, accepted_count, rejected_count),
+            checkpoint_file,
+        )
+        print(f"Saved checkpoint: {checkpoint_file}")
+        self._save_training_examples(checkpoint_file + ".examples")
+
+    def save_latest_checkpoint(self, iteration, accepted_count=0, rejected_count=0):
+        """Save checkpoint_latest.pt + training examples EVERY iteration.
+
+        Mirrors alpha-zero-general Coach.py behavior:
+        - saveTrainExamples() is called every iteration (line 100), not just on accept
+        - temp.pth.tar is kept as crash-recovery state
+
+        This ensures that:
+        1. Training examples are never lost on crash (the main bug this fixes)
+        2. Resume always picks up from the latest iteration, not the last accepted one
+        """
+        models_dir = os.path.dirname(self.checkpoint_path)
+        latest_ckpt = os.path.join(models_dir, "checkpoint_latest.pt")
+        torch.save(
+            self._build_checkpoint_dict(iteration, accepted_count, rejected_count),
+            latest_ckpt,
+        )
+        self._save_training_examples(latest_ckpt + ".examples")
+        print(f"Saved latest checkpoint: {latest_ckpt}")
 
     def load_checkpoint(self, path):
-        """Load model checkpoint."""
-        checkpoint = torch.load(path)
+        """Load model checkpoint. Returns iteration number."""
+        # map_location ensures checkpoints saved on GPU can be loaded on CPU
+        # and vice versa.
+        checkpoint = torch.load(path, map_location=self.device)
         self.model.load_state_dict(checkpoint["model_state_dict"])
-        self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+        # No optimizer to restore — fresh Adam is created each iteration
         self.policy_losses = checkpoint.get("policy_losses", [])
         self.value_losses = checkpoint.get("value_losses", [])
         self.total_losses = checkpoint.get("total_losses", [])
+        self._resumed_accepted_count = checkpoint.get("accepted_count", 0)
+        self._resumed_rejected_count = checkpoint.get("rejected_count", 0)
+        self.global_best_win_rate = checkpoint.get("global_best_win_rate", 0.0)
+
+        # Load sliding-window training history from sidecar .examples file
+        examples_file = path + ".examples"
+        if os.path.exists(examples_file):
+            try:
+                with open(examples_file, "rb") as f:
+                    self.train_examples_history = pickle.load(f)
+                print(
+                    f"Loaded training history: {examples_file} "
+                    f"({len(self.train_examples_history)} iterations)"
+                )
+            except Exception as e:
+                print(f"Warning: failed to load training history: {e}")
+                self.train_examples_history = []
+        else:
+            print(
+                f"Warning: training history file not found ({examples_file}), "
+                "starting with empty history"
+            )
+            self.train_examples_history = []
 
         # Load existing loss records into logger
         for i, (p_loss, v_loss, t_loss) in enumerate(
@@ -544,7 +854,10 @@ class AlphaZeroTrainer:
                 elapsed_time=0,
             )
 
-        return checkpoint.get("iteration", 0)
+        # Return the NEXT iteration to run (saved iteration + 1), not the
+        # already-completed one. Otherwise resume re-runs the last completed
+        # iteration redundantly.
+        return checkpoint.get("iteration", -1) + 1
 
     def plot_metrics(self):
         """Plot training metrics."""
@@ -586,9 +899,30 @@ class AlphaZeroTrainer:
             print(
                 f"Next iteration: {start_iteration + 1}/{start_iteration + max_iterations}"
             )
-
         # Adjust total iterations to ensure we train for the specified number regardless of resuming
         end_iteration = start_iteration + max_iterations
+
+        # Load best model if it exists
+        models_dir = os.path.dirname(self.checkpoint_path)
+        best_path = os.path.join(models_dir, "best.pt")
+        if os.path.exists(best_path):
+            best_model_state = torch.load(best_path, map_location="cpu")
+            print(f"Loaded best model from {best_path}")
+        else:
+            best_model_state = None
+            print("No best model found, first iteration will auto-accept")
+
+        # Arena for model evaluation
+        arena = Arena(
+            game_size=self.game_size,
+            num_games=self.arena_games,
+            mcts_simulations=self.arena_mcts_simulations,
+            c_puct=self.c_puct,
+        )
+
+        # Restore accept/reject counts from checkpoint if resuming
+        accepted_count = getattr(self, "_resumed_accepted_count", 0)
+        rejected_count = getattr(self, "_resumed_rejected_count", 0)
 
         # Training loop
         for iteration in range(start_iteration, end_iteration):
@@ -636,8 +970,97 @@ class AlphaZeroTrainer:
                 elapsed_time=elapsed_time,
             )
 
-            # Save checkpoint
-            self.save_checkpoint(iteration)
+            # Save candidate as temp.pt for crash recovery
+            temp_path = os.path.join(models_dir, "temp.pt")
+            candidate_state = {k: v.cpu() for k, v in self.model.state_dict().items()}
+            torch.save(candidate_state, temp_path)
+
+            # Evaluate CANDIDATE vs Random BEFORE arena.
+            # This measures absolute strength of the just-trained model,
+            # independent of whether Arena accepts it. Arena only tells us
+            # "candidate vs previous best", which doesn't guarantee absolute
+            # improvement. vs-random is the only independent yardstick.
+            if (iteration + 1) % self.eval_vs_random_interval == 0:
+                print(f"Evaluating CANDIDATE vs random ({self.eval_vs_random_games} games)...")
+                wr_vs_random, w, l, d = self.evaluate_vs_random(
+                    num_games=self.eval_vs_random_games
+                )
+                print(
+                    f"Candidate vs random: {wr_vs_random * 100:.1f}% ({w}W / {l}L / {d}D) | "
+                    f"global best so far: {self.global_best_win_rate * 100:.1f}%"
+                )
+
+                if wr_vs_random > self.global_best_win_rate:
+                    old_rate = self.global_best_win_rate
+                    self.global_best_win_rate = wr_vs_random
+                    # Saved file name reflects its meaning: "the model with
+                    # the highest vs-random win rate ever observed". This is
+                    # INDEPENDENT of Arena — Arena may have rejected this
+                    # exact candidate. Use this file when you want "the
+                    # absolute best model by objective metric".
+                    vs_random_best_path = os.path.join(models_dir, "vs_random_best.pt")
+                    torch.save(candidate_state, vs_random_best_path)
+                    print(
+                        f"⭐ NEW vs_random BEST: {old_rate * 100:.1f}% -> {wr_vs_random * 100:.1f}% "
+                        f"(saved to {vs_random_best_path})"
+                    )
+
+            # First iteration auto-accept (no best model to compare against)
+            if best_model_state is None:
+                print("First iteration — auto-accepting model as best")
+                torch.save(candidate_state, best_path)
+                accepted_count += 1
+                self.save_checkpoint(iteration, accepted_count, rejected_count)
+                best_model_state = candidate_state
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
+                print(
+                    f"Arena: ACCEPTED (first iteration) | Accepted: {accepted_count}, Rejected: {rejected_count}"
+                )
+                # Save latest (same as accepted checkpoint for first iter)
+                self.save_latest_checkpoint(iteration, accepted_count, rejected_count)
+            else:
+                # Run arena evaluation
+                print(f"Arena evaluation: {self.arena_games} games...")
+                new_wins, old_wins, draws = arena.play_games(
+                    candidate_state, best_model_state
+                )
+                denominator = new_wins + old_wins
+                win_rate = new_wins / denominator if denominator > 0 else 0.0
+
+                print(
+                    f"Arena: New model wins: {new_wins}, Best model wins: {old_wins}, "
+                    f"Draws: {draws}, Win rate: {win_rate * 100:.1f}%"
+                )
+
+                if win_rate >= self.arena_threshold:
+                    print(
+                        f"Arena: ACCEPTING new model (win rate {win_rate * 100:.1f}% >= {self.arena_threshold * 100:.1f}%)"
+                    )
+                    torch.save(candidate_state, best_path)
+                    accepted_count += 1
+                    self.save_checkpoint(iteration, accepted_count, rejected_count)
+                    best_model_state = candidate_state
+                else:
+                    print(
+                        f"Arena: REJECTING new model (win rate {win_rate * 100:.1f}% < {self.arena_threshold * 100:.1f}%)"
+                    )
+                    # Reload best model weights into the live trainer model
+                    self.model.load_state_dict(best_model_state)
+                    self.model.to(self.device)
+                    rejected_count += 1
+
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
+
+                print(
+                    f"Iteration {iteration}: Accepted: {accepted_count}, Rejected: {rejected_count}"
+                )
+
+                # Save latest checkpoint EVERY iteration (accept or reject).
+                # Model state here is already correct: accepted = new model,
+                # rejected = reverted to best. Training examples are always current.
+                self.save_latest_checkpoint(iteration, accepted_count, rejected_count)
 
             # Plot metrics
             if (iteration + 1) % 5 == 0 or iteration == end_iteration - 1:
