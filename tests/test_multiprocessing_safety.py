@@ -46,7 +46,8 @@ class TestMultiprocessingSafety:
             c_puct=2.0,
             temperature=0.8,
             dirichlet_alpha=0.3,
-            dirichlet_weight=0.25
+            dirichlet_weight=0.25,
+            temp_threshold=15
         )
         
         # 检查全局变量是否正确设置
@@ -111,11 +112,12 @@ class TestMultiprocessingSafety:
         _worker_init(
             state_dict=state_dict,
             game_size=self.game_size,
-            num_mcts_simulations=10,  # 减少模拟次数以加快测试
+            num_mcts_simulations=10,
             c_puct=2.0,
             temperature=0.8,
             dirichlet_alpha=0.3,
-            dirichlet_weight=0.25
+            dirichlet_weight=0.25,
+            temp_threshold=15
         )
         
         # 测试worker play函数
@@ -158,10 +160,12 @@ class TestConcurrencyIssues:
         state_dict = model1.state_dict()
         model2.load_state_dict(state_dict)
         
-        # 创建相同的输入
-        test_input = torch.randn(1, 3, game_size, game_size)
-        
-        # 获取输出
+        # 创建相同的输入 (1-channel: B, board_x, board_y)
+        test_input = torch.randn(1, game_size, game_size)
+
+        # 获取输出 (eval mode needed for BN with batch_size=1)
+        model1.eval()
+        model2.eval()
         with torch.no_grad():
             output1 = model1(test_input)
             output2 = model2(test_input)

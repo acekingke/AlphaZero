@@ -17,7 +17,7 @@ from models.neural_network import AlphaZeroNetwork
 from mcts.mcts import MCTS
 
 class OthelloGUI(tk.Tk):
-    def __init__(self, board_size=6, square_size=60, num_simulations=800, c_puct=2.5, model_path=None):
+    def __init__(self, board_size=6, square_size=60, num_simulations=200, c_puct=1.0, model_path=None):
         super().__init__()
         self.title("Othello - You vs AlphaZero")
         self.board_size = board_size
@@ -62,19 +62,35 @@ class OthelloGUI(tk.Tk):
         return model
 
     def _find_latest_checkpoint(self):
-        """Find the checkpoint with the highest iteration number."""
+        """Prefer the highest-numbered frozen checkpoint_N.pt over best.pt.
+
+        Rationale: best.pt gets overwritten every time Arena accepts a new
+        model, so loading it mid-training is a race — the file may change
+        between when we stat() it and when we torch.load() it. Numbered
+        checkpoints are write-once. Pass --model explicitly to override.
+        """
         pattern = './models/checkpoint_*.pt'
         files = glob.glob(pattern)
-        if not files:
-            raise FileNotFoundError(f"No checkpoints found matching {pattern}")
-        def extract_num(path):
-            match = re.search(r'checkpoint_(\d+)\.pt$', path)
-            return int(match.group(1)) if match else -1
-        files = [f for f in files if extract_num(f) >= 0]
-        return max(files, key=extract_num)
+        if files:
+            def extract_num(path):
+                match = re.search(r'checkpoint_(\d+)\.pt$', path)
+                return int(match.group(1)) if match else -1
+            files = [f for f in files if extract_num(f) >= 0]
+            if files:
+                return max(files, key=extract_num)
+        # Fallback to best.pt only if no numbered checkpoints exist.
+        best_path = './models/best.pt'
+        if os.path.exists(best_path):
+            return best_path
+        raise FileNotFoundError(
+            f"No checkpoints found: neither {pattern} nor ./models/best.pt"
+        )
 
     def reset_game(self):
         self.env.reset()
+        # Clear MCTS stats between games so the new game doesn't reuse
+        # opening analysis from the finished one.
+        self.mcts.reset_tree()
         self.update_board()
         self.status_bar.config(text="Your turn (Black)")
 
@@ -145,7 +161,21 @@ class OthelloGUI(tk.Tk):
             self.env.step(action)
             self.update_board()
             if not self.env.get_board().is_done():
-                self.after(100, self.ai_move) # Give a small delay for AI move
+                # env.step auto-resolves forced passes: if the opponent had
+                # no legal moves, current_player is flipped back to us. Detect
+                # that here and notify the player instead of silently handing
+                # the turn back.
+                if self.env.board.current_player == self.human_player_id:
+                    try:
+                        messagebox.showinfo(
+                            "AI Passes",
+                            "AI (White) has no valid moves. You play again.",
+                        )
+                    except Exception:
+                        pass
+                    # Turn is already ours; no AI move to schedule.
+                else:
+                    self.after(100, self.ai_move)  # Give a small delay for AI move
         else:
             messagebox.showwarning("Invalid Move", "This is not a valid move.")
 
@@ -189,7 +219,22 @@ class OthelloGUI(tk.Tk):
 
             self.env.step(action)
             self.update_board()
-            self.check_game_over()
+            # NOTE: update_board() already calls check_game_over() internally.
+            # A second call here would pop the Game Over dialog twice.
+
+            # Detect human forced-pass: env.step auto-flips back to AI if the
+            # human has no legal moves after AI's move. Notify and chain
+            # another AI move.
+            if not self.env.get_board().is_done():
+                if self.env.board.current_player == self.ai_player_id:
+                    try:
+                        messagebox.showinfo(
+                            "You Pass",
+                            "You have no valid moves. AI plays again.",
+                        )
+                    except Exception:
+                        pass
+                    self.after(100, self.ai_move)
 
     def update_status(self):
         board = self.env.get_board()
@@ -229,8 +274,8 @@ class OthelloGUI(tk.Tk):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Othello GUI Game - Play against AlphaZero')
     parser.add_argument('--model', type=str, default=None, help='Path to model checkpoint (default: latest)')
-    parser.add_argument('--mcts_simulations', type=int, default=150, help='Number of MCTS simulations per move (default: 150)')
-    parser.add_argument('--c_puct', type=float, default=2.5, help='c_puct value for MCTS (default: 2.5)')
+    parser.add_argument('--mcts_simulations', type=int, default=200, help='Number of MCTS simulations per move (default: 200, matches play.py)')
+    parser.add_argument('--c_puct', type=float, default=1.0, help='c_puct value for MCTS (default: 1.0, matches v20 training)')
     parser.add_argument('--board_size', type=int, default=6, help='Board size (default: 6)')
     parser.add_argument('--square_size', type=int, default=60, help='Square size in pixels (default: 60)')
     

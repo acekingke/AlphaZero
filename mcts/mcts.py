@@ -1,322 +1,295 @@
+"""Dict-based MCTS matching alpha-zero-general.
+
+State is keyed by canonical board bytes. Statistics (Qsa/Nsa/Ns/Ps/Vs)
+persist across moves within a game AND across games within an Arena session
+(unless reset_tree() is called explicitly), which is how alpha-zero-general
+achieves effective search depth >> num_simulations per move.
+
+Public API (compatible with prior tree-based version):
+    search(state, env, temperature, add_noise) -> action_probs
+    advance_root(action) -> no-op (state-keyed, nothing to descend)
+    reset_tree()         -> clears all dicts; call at session boundaries
+    canonical_to_observation(canonical, env) -> shim used by callers
+"""
+import copy
 import math
 import numpy as np
 import torch
-import copy
+
+EPS = 1e-8
+
 
 class Node:
-    """Node in the MCTS tree."""
-    def __init__(self, prior):
-        self.visit_count = 0
+    """Deprecated shim kept so legacy imports don't break.
+
+    Dict-based MCTS does not use Node objects. Kept here only so that
+    `from mcts.mcts import Node` still succeeds for old tests.
+    """
+    def __init__(self, prior=0.0):
         self.prior = prior
+        self.visit_count = 0
         self.value_sum = 0
         self.children = {}
         self.state = None
-    
-    def expanded(self):
-        """Check if the node is expanded."""
-        return len(self.children) > 0
-    
+
     def value(self):
-        """Get the mean value of the node."""
-        if self.visit_count == 0:
-            return 0
-        return self.value_sum / self.visit_count
-    
-    def select_child(self, c_puct):
-        """Select a child according to the PUCT formula.
+        return 0.0 if self.visit_count == 0 else self.value_sum / self.visit_count
 
-        PUCT: score = Q(s,a) + c_puct * P(s,a) * sqrt(N(s)) / (1 + N(s,a))
+    def expanded(self):
+        return len(self.children) > 0
 
-        where N(s) is the parent's visit count. On the very first simulation
-        when no children have been visited yet, using sum_of_children_visits
-        would give sqrt(0) = 0, completely zeroing the exploration term and
-        picking the lowest-indexed action deterministically. We use max(1,
-        sum_visits) to ensure the exploration term is non-zero on the first
-        visit, so priors (including Dirichlet noise) actually bias the initial
-        selection. This matches the intent of the AlphaZero paper which uses
-        sqrt(parent_N) where parent_N >= 1 whenever we're selecting.
-        """
-        best_score = -float('inf')
-        best_action = -1
-
-        # Parent's visit count (proxy: sum of children visits).
-        # max(1, ...) ensures exploration term is nonzero on first pass.
-        sum_visits = sum(child.visit_count for child in self.children.values())
-        sqrt_parent_visits = math.sqrt(max(1, sum_visits))
-
-        for action, child in self.children.items():
-            u = c_puct * child.prior * sqrt_parent_visits / (1 + child.visit_count)
-            q = child.value()
-            score = q + u
-
-            if score > best_score:
-                best_score = score
-                best_action = action
-
-        return best_action
-    
     def expand(self, state, policy):
-        """Expand the node with the given policy."""
         self.state = state
-        for action, prob in enumerate(policy):
-            if prob > 0:
-                self.children[action] = Node(prior=prob)
+        for a, p in enumerate(policy):
+            if p > 0:
+                self.children[a] = Node(prior=float(p))
+
 
 class MCTS:
+    """Dict-based MCTS.
+
+    Matches alpha-zero-general (MCTS.py) semantics but adapted to the
+    env-based interface used in this project:
+      - `env.board.get_canonical_state()` instead of `game.getCanonicalForm`
+      - `env.step(action)` handles forced passes internally
+      - `env.get_valid_moves_mask()` returns 0/1 vector incl. pass slot
     """
-    Simplified MCTS implementation with canonical state support and Tree Visitor pattern.
-    This version combines the simplicity of the git version with important improvements:
-    1. Canonical state support for consistent training
-    2. Tree Visitor pattern to avoid stack overflow
-    3. Clean, maintainable architecture
-    """
-    
-    def __init__(self, model, c_puct=2.0, num_simulations=800, dirichlet_alpha=0.5, dirichlet_weight=0.3):
+
+    def __init__(
+        self,
+        model,
+        c_puct=1.0,
+        num_simulations=25,
+        dirichlet_alpha=0.3,
+        dirichlet_weight=0.25,
+    ):
         self.model = model
         self.c_puct = c_puct
         self.num_simulations = num_simulations
         self.dirichlet_alpha = dirichlet_alpha
         self.dirichlet_weight = dirichlet_weight
-        
+
+        # alpha-zero-general's six dicts, keyed by canonical state bytes
+        self.Qsa = {}   # (s_key, a) -> Q value (from s_key's current player's perspective)
+        self.Nsa = {}   # (s_key, a) -> visit count
+        self.Ns = {}    # s_key -> sum of child visits
+        self.Ps = {}    # s_key -> masked+normalized policy prior vector
+        self.Vs = {}    # s_key -> valid-moves mask
+
+    # ---- Session management ----
+
+    def reset_tree(self):
+        """Clear all statistics. Call when starting a genuinely new session
+        (e.g., between arena evaluations of different model pairs).
+        Within a single self-play game or within a 40-game arena session,
+        do NOT call this — accumulation across games is the whole point."""
+        self.Qsa.clear()
+        self.Nsa.clear()
+        self.Ns.clear()
+        self.Ps.clear()
+        self.Vs.clear()
+
+    def advance_root(self, action):
+        """No-op. Dict-keyed storage automatically shares statistics for any
+        position reached by any path; no notion of 'root' to descend."""
+        return
+
+    # ---- Public search ----
+
+    def canonical_to_observation(self, canonical_state, env):
+        """Backward-compat shim — callers still pass `state` into search()
+        but we now derive canonical internally from env."""
+        return np.array(canonical_state, dtype=np.float32)
+
     def search(self, state, env, temperature=1.0, add_noise=False):
-        """
-        Perform MCTS search starting from the given state.
-        
-        Args:
-            state: Current observation state (already converted from canonical state)
-            env: Game environment
-            temperature: Temperature for action selection
-            add_noise: Whether to add Dirichlet noise to the prior probabilities
-            
-        Returns:
-            Action probabilities based on visit counts
-        """
-        # Create root node
-        root = Node(0)
-        
-        # Get canonical state for MCTS tree expansion
-        canonical_state = env.board.get_canonical_state()
-        
-        # Use canonical state for policy evaluation (converted internally)
-        policy, value = self._evaluate_state(canonical_state, env)
-        
-        # Add Dirichlet noise if requested
+        """Run num_simulations MCTS simulations from env's current state,
+        return action probabilities based on visit counts."""
+        canonical = env.board.get_canonical_state()
+        s_key = self._state_key(canonical)
+
+        # Ensure root is expanded (stores Ps, Vs, Ns entry for s_key)
+        if s_key not in self.Ps:
+            self._expand(canonical, env, s_key)
+
+        # Apply Dirichlet noise to root priors if requested. We re-apply each
+        # call so self-play gets fresh noise every move (per AlphaZero paper).
+        # Note: alpha-zero-general has no Dirichlet noise; this is our extension.
         if add_noise:
-            policy = self._add_dirichlet_noise(policy, env)
-        
-        # Expand root node
-        root.expand(canonical_state, policy)
-        
-        # Perform MCTS simulations using Tree Visitor pattern (iterative)
+            self.Ps[s_key] = self._with_dirichlet_noise(self.Ps[s_key], self.Vs[s_key])
+
         for _ in range(self.num_simulations):
-            self._simulate_iterative(root, env)
-        
-        # Calculate action probabilities based on visit counts
-        return self._get_action_probabilities(root, temperature, env)
-    
-    def _evaluate_state(self, canonical_state, env):
-        """Evaluate state using neural network with canonical state representation."""
-        # Convert canonical state to observation format expected by neural network
-        observation = self.canonical_to_observation(canonical_state, env)
-        tensor_obs = torch.FloatTensor(observation).unsqueeze(0)
+            self._simulate(env)
 
-        # BatchNorm in training mode requires batch size > 1. MCTS evaluates
-        # single states, so we MUST put the model in eval mode (which uses
-        # running BN stats instead of per-batch stats).
+        return self._get_action_probabilities(s_key, temperature, env)
+
+    # ---- Internals ----
+
+    @staticmethod
+    def _state_key(canonical_state):
+        """Use raw bytes of int canonical board as hashable key. Fast and exact."""
+        return canonical_state.astype(np.int8).tobytes()
+
+    def _nn_predict(self, canonical_state, env):
+        board = torch.FloatTensor(canonical_state.astype(np.float64))
+        board = board.view(1, env.board.size, env.board.size)
         self.model.eval()
-
         with torch.no_grad():
             try:
                 device = next(self.model.parameters()).device
-                if tensor_obs.device != device:
-                    tensor_obs = tensor_obs.to(device)
-
-                policy_logits, value = self.model(tensor_obs)
-                policy = torch.softmax(policy_logits, dim=1).squeeze(0).cpu().numpy()
-                value = value.item()
+                if board.device != device:
+                    board = board.to(device)
+                log_pi, value = self.model(board)
+                policy = torch.exp(log_pi).data.cpu().numpy()[0]
+                value = float(value.data.cpu().numpy()[0][0])
             except Exception as e:
                 print(f"Error in neural network evaluation: {e}")
-                # Fallback to random policy
                 policy = np.ones(env.board.get_action_space_size()) / env.board.get_action_space_size()
                 value = 0.0
-        
-        # Apply mask for valid actions
-        valid_moves_mask = env.get_valid_moves_mask()
-        masked_policy = policy * valid_moves_mask
-        
-        # Renormalize the policy
-        policy_sum = np.sum(masked_policy)
-        if policy_sum > 0:
-            masked_policy /= policy_sum
+        return policy, value
+
+    def _expand(self, canonical_state, env, s_key):
+        """Evaluate NN at state, mask + normalize, store Ps/Vs/Ns.
+        Returns the NN-predicted value (from current player's perspective)."""
+        policy, value = self._nn_predict(canonical_state, env)
+        valids = env.get_valid_moves_mask()
+        masked = policy * valids
+        total = float(masked.sum())
+        if total > 0:
+            masked = masked / total
+        elif valids.sum() > 0:
+            masked = valids.astype(np.float32) / float(valids.sum())
         else:
-            # If no valid moves, this should not happen in normal gameplay
-            # but provide fallback anyway
-            if np.sum(valid_moves_mask) > 0:
-                masked_policy = valid_moves_mask / np.sum(valid_moves_mask)
-            else:
-                # Ultimate fallback - uniform distribution
-                masked_policy = np.ones(env.board.get_action_space_size()) / env.board.get_action_space_size()
-        
-        return masked_policy, value
-    
-    def canonical_to_observation(self, canonical_state, env):
-        """
-        Convert canonical state to observation format for neural network.
-        Since we're using canonical state, current player is always +1.
-        """
-        size = env.board.size
-        observation = np.zeros((3, size, size), dtype=np.float32)
-        
-        # Current player's pieces (always +1 in canonical state)
-        observation[0] = (canonical_state == 1).astype(np.float32)
-        # Opponent's pieces (always -1 in canonical state)
-        observation[1] = (canonical_state == -1).astype(np.float32)
-        # Current player indicator (always 1 since current player is +1 in canonical state)
-        observation[2] = np.ones((size, size), dtype=np.float32)
-        
-        return observation
-    
-    def _add_dirichlet_noise(self, policy, env):
-        """Add Dirichlet noise to the policy for exploration."""
-        valid_moves_mask = env.get_valid_moves_mask()
-        noise = np.random.dirichlet([self.dirichlet_alpha] * np.sum(valid_moves_mask))
-        noise_idx = 0
-        noisy_policy = np.copy(policy)
-        
+            masked = np.ones_like(policy, dtype=np.float32) / len(policy)
+
+        self.Ps[s_key] = masked
+        self.Vs[s_key] = valids.astype(np.int8)
+        self.Ns[s_key] = 0
+        return value
+
+    def _with_dirichlet_noise(self, policy, valids):
+        """Return a NEW policy array = (1-w)*policy + w*noise on valid actions."""
+        num_valid = int(valids.sum())
+        if num_valid == 0:
+            return policy
+        noise = np.random.dirichlet([self.dirichlet_alpha] * num_valid)
+        out = np.copy(policy)
+        j = 0
+        w = self.dirichlet_weight
         for i in range(len(policy)):
-            if valid_moves_mask[i] == 1:
-                noisy_policy[i] = policy[i] * (1 - self.dirichlet_weight) + noise[noise_idx] * self.dirichlet_weight
-                noise_idx += 1
-        
-        return noisy_policy
-    
-    def _simulate_iterative(self, root, env):
-        """
-        Perform one MCTS simulation using Tree Visitor pattern (iterative).
+            if valids[i] == 1:
+                out[i] = policy[i] * (1 - w) + noise[j] * w
+                j += 1
+        return out
 
-        Value perspective convention: every value stored in a node is from
-        the perspective of the player whose turn it is at that state. This
-        matches the canonical_state convention used by the neural network.
+    def _simulate(self, env):
+        """One MCTS simulation: select → (expand | terminal) → backprop.
 
-        Backpropagation flips the sign ONLY when the actual player switches
-        between nodes. In Othello, a move can trigger a forced pass (opponent
-        has no valid moves), in which case current_player stays the same and
-        the sign should NOT flip for that step.
+        Iterative implementation with explicit path stack so we can handle
+        perspective flipping across forced passes where current_player
+        doesn't change after env.step. That flipping is detected by
+        comparing player_before at each step.
         """
-        # Tree Visitor pattern: explicit stack of (parent_node, action, player_at_parent)
-        path_stack = []
-        node = root
         env_copy = copy.deepcopy(env)
+        path = []  # list of (s_key, action, player_before_step)
 
-        # Selection phase - traverse down the tree
-        while node.expanded():
-            action = node.select_child(self.c_puct)
-            # Record the player who is about to act at this parent node.
-            # We'll use this during backprop to detect perspective changes.
-            player_at_parent = env_copy.board.current_player
-            path_stack.append((node, action, player_at_parent))
-
-            env_copy.step(action)
-
-            if action in node.children:
-                node = node.children[action]
-            else:
+        while True:
+            if env_copy.board.is_done():
+                winner = env_copy.board.get_winner()
+                if winner == 0:
+                    v = 0.0
+                else:
+                    leaf_player = env_copy.board.current_player
+                    # Value from leaf's current_player POV. After the final
+                    # env.step, current_player has flipped (normally), so
+                    # winner == leaf_player means leaf_player was the LOSER
+                    # in the more common sense... but the canonical POV is
+                    # that of whoever is TO MOVE at this (terminal) node.
+                    # If winner == leaf_player → from their POV, +1.
+                    v = 1.0 if winner == leaf_player else -1.0
                 break
 
-        # Evaluation phase — both branches must produce value from the
-        # leaf's current player's perspective.
-        canonical_state = env_copy.board.get_canonical_state()
-        game_ended = env_copy.board.is_done()
+            canonical = env_copy.board.get_canonical_state()
+            s_key = self._state_key(canonical)
 
-        if game_ended:
-            # Terminal value from leaf's current player perspective.
-            # This matches the NN convention where canonical_state is always
-            # from the current player's perspective (current player = +1).
-            # Both branches of the if/else must agree on the value reference
-            # frame for backpropagation to work correctly.
-            winner = env_copy.board.get_winner()
-            if winner == 0:  # Draw
-                value = 0.0
-            else:
-                leaf_current_player = env_copy.board.current_player
-                value = 1.0 if winner == leaf_current_player else -1.0
-        else:
-            policy, value = self._evaluate_state(canonical_state, env_copy)
-            node.expand(canonical_state, policy)
+            if s_key not in self.Ps:
+                # Leaf: expand and take NN's value
+                v = self._expand(canonical, env_copy, s_key)
+                break
 
-        # Backpropagation — walk from leaf back to root, flipping the sign
-        # only when the player actually changes between adjacent nodes.
+            # PUCT action selection
+            valids = self.Vs[s_key]
+            Ns_s = self.Ns[s_key]
+            Ps_s = self.Ps[s_key]
+            sqrt_Ns = math.sqrt(Ns_s + EPS)
+
+            best_score = -float("inf")
+            best_action = -1
+            for a in range(len(valids)):
+                if valids[a] == 0:
+                    continue
+                if (s_key, a) in self.Qsa:
+                    q = self.Qsa[(s_key, a)]
+                    u = self.c_puct * Ps_s[a] * math.sqrt(Ns_s) / (1 + self.Nsa[(s_key, a)])
+                else:
+                    q = 0.0
+                    u = self.c_puct * Ps_s[a] * sqrt_Ns
+                score = q + u
+                if score > best_score:
+                    best_score = score
+                    best_action = a
+
+            player_before = env_copy.board.current_player
+            path.append((s_key, best_action, player_before))
+            env_copy.step(best_action)
+
+        # Backprop. `v` is from the leaf's current_player POV.
+        # Walking from leaf back to root, we flip sign at every step whose
+        # parent_player differs from the perspective we currently hold.
         leaf_player = env_copy.board.current_player
-        node.value_sum += value
-        node.visit_count += 1
-
-        current_value = value
+        current_v = v
         prev_player = leaf_player
 
-        for parent_node, action, parent_player in reversed(path_stack):
-            # If parent's player differs from the child's (prev) player,
-            # the perspective flips and we negate. Otherwise (forced pass
-            # scenario) the perspective stays the same.
-            if parent_player != prev_player:
-                current_value = -current_value
-            parent_node.value_sum += current_value
-            parent_node.visit_count += 1
-            prev_player = parent_player
-    
-    def _get_action_probabilities(self, root, temperature, env):
-        """Calculate final action probabilities based on visit counts."""
-        # Use environment's action space size for consistency
-        action_space_size = env.board.get_action_space_size()
-        
-        action_probs = np.zeros(action_space_size)
-        for action, child in root.children.items():
-            if 0 <= action < action_space_size:  # Enhanced bounds check
-                action_probs[action] = child.visit_count
-
-        # Edge case: if no children have any visits (e.g., num_simulations=0
-        # or expansion failure), fall back to a valid-moves uniform distribution
-        # so downstream np.random.choice doesn't crash with "p does not sum to 1".
-        if np.sum(action_probs) == 0:
-            valid_moves_mask = env.get_valid_moves_mask()
-            if np.sum(valid_moves_mask) > 0:
-                action_probs = valid_moves_mask.astype(np.float32) / np.sum(valid_moves_mask)
+        for s_key, a, player_at_s in reversed(path):
+            if player_at_s != prev_player:
+                current_v = -current_v
+            if (s_key, a) in self.Qsa:
+                n_old = self.Nsa[(s_key, a)]
+                self.Qsa[(s_key, a)] = (n_old * self.Qsa[(s_key, a)] + current_v) / (n_old + 1)
+                self.Nsa[(s_key, a)] = n_old + 1
             else:
-                # No valid moves and no pass either — degenerate state.
-                # Return uniform over entire action space as last resort.
-                action_probs = np.ones(action_space_size, dtype=np.float32) / action_space_size
-            return action_probs
+                self.Qsa[(s_key, a)] = current_v
+                self.Nsa[(s_key, a)] = 1
+            self.Ns[s_key] = self.Ns.get(s_key, 0) + 1
+            prev_player = player_at_s
 
-        # Temperature annealing with numerical stability
-        if temperature == 0:  # "Deterministic" selection with random tie-breaking
-            # Random tie-breaking among best actions.
-            # Matches alpha-zero-general MCTS.getActionProb (temp=0 branch):
-            # when multiple actions have equal max visit counts (common for
-            # weak networks where MCTS produces near-uniform visit distributions),
-            # pick one at random instead of always the lowest-indexed one
-            # (which np.argmax does). This is the ONLY source of non-determinism
-            # in MCTS with a fixed network, and it's crucial for Arena to
-            # produce statistically meaningful results (otherwise all N arena
-            # games collapse to 2 unique outcomes).
-            # Note: visit counts are integers stored as float, so equality
-            # comparison is exact. If you ever change action_probs to involve
-            # normalization BEFORE this branch, use np.isclose instead.
-            max_val = action_probs.max()
-            best_actions = np.flatnonzero(action_probs == max_val)
-            best_action = int(np.random.choice(best_actions))
-            action_probs = np.zeros(len(action_probs))
-            action_probs[best_action] = 1
-        else:  # Stochastic selection
-            # Prevent numerical overflow by setting minimum temperature
-            safe_temperature = max(temperature, 1e-6)
+    def _get_action_probabilities(self, s_key, temperature, env):
+        action_space_size = env.board.get_action_space_size()
+        counts = np.zeros(action_space_size, dtype=np.float64)
+        for a in range(action_space_size):
+            key = (s_key, a)
+            if key in self.Nsa:
+                counts[a] = self.Nsa[key]
 
-            # Additional numerical stability: normalize large values
-            max_val = np.max(action_probs)
-            if max_val > 1000:  # Prevent extreme values from causing overflow
-                action_probs = action_probs / max_val
+        if counts.sum() == 0:
+            valids = env.get_valid_moves_mask()
+            if valids.sum() > 0:
+                return valids.astype(np.float32) / float(valids.sum())
+            return np.ones(action_space_size, dtype=np.float32) / action_space_size
 
-            action_probs = action_probs ** (1 / safe_temperature)
-            action_probs /= np.sum(action_probs)
+        if temperature == 0:
+            max_val = counts.max()
+            best_actions = np.flatnonzero(counts == max_val)
+            best = int(np.random.choice(best_actions))
+            probs = np.zeros(action_space_size, dtype=np.float32)
+            probs[best] = 1.0
+            return probs
 
-        return action_probs
-# For backward compatibility
+        safe_temp = max(temperature, 1e-6)
+        if counts.max() > 1000:
+            counts = counts / counts.max()
+        counts_pow = counts ** (1.0 / safe_temp)
+        return counts_pow / counts_pow.sum()
+
+
+# Backward-compat alias
 SimplifiedMCTS = MCTS

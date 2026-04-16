@@ -115,6 +115,7 @@ def _worker_play(seed_and_count):
             game_history.append((state, action_probs, env.board.current_player))
             action = np.random.choice(len(action_probs), p=action_probs)
             _, reward, done, _ = env.step(action)
+            mcts.advance_root(action)
             step += 1
             if done:
                 break
@@ -191,6 +192,9 @@ class Arena:
             action = int(np.argmax(action_probs))  # action_probs is already one-hot after tie-break
 
             _, _, done, _ = env.step(action)
+            # Advance BOTH MCTS trees: each tracks the full game state from its own view.
+            mcts1.advance_root(action)
+            mcts2.advance_root(action)
             if done:
                 break
 
@@ -237,6 +241,15 @@ class Arena:
             env = OthelloEnv(size=self.game_size)
             env.reset()
 
+            # NOTE: we deliberately do NOT reset mcts1/mcts2 trees between games.
+            # Matches alpha-zero-general Coach.py:111-118 behavior where pmcts/nmcts
+            # are created once per arena session and accumulate stats across all 40
+            # games. Common opening positions get visited thousands of times across
+            # the session, giving effectively deep search despite low per-move sims.
+            # The tree root auto-resets to None inside search() via the staleness
+            # check when env doesn't match, so new games start fresh at the root
+            # level but still benefit from cached subtrees encountered later.
+
             # First half: model1 plays as Black; second half: model1 plays as White
             model1_is_black = game_idx < half
 
@@ -280,8 +293,6 @@ class AlphaZeroTrainer:
         temp_threshold=15,
         eval_vs_random_interval=5,
         eval_vs_random_games=30,
-        lr_decay_factor=0.98,
-        lr_min=1e-5,
     ):
         self.game_size = game_size
         self.num_iterations = num_iterations
@@ -291,7 +302,6 @@ class AlphaZeroTrainer:
         self.c_puct = c_puct
         self.batch_size = batch_size
         self.num_epochs = num_epochs
-        self.lr = lr
         self.checkpoint_path = checkpoint_path
         self.log_dir = log_dir
 
@@ -323,7 +333,10 @@ class AlphaZeroTrainer:
         # Initialize neural network
         self.model = AlphaZeroNetwork(game_size, device=self.device)
         self.model.to(self.device)
-        self.optimizer = optim.Adam(self.model.parameters(), lr=lr, weight_decay=1e-4)
+        # NOTE: optimizer is created FRESH each iteration in train_network(),
+        # matching alpha-zero-general's NNet.train() which does:
+        #   optimizer = optim.Adam(self.nnet.parameters())
+        # No persistent optimizer, no weight_decay, no LR scheduling.
 
         # Sliding window training data (per-iteration history).
         # Keeps the most recent N iterations of self-play data, discarding older
@@ -361,13 +374,6 @@ class AlphaZeroTrainer:
         self.eval_vs_random_interval = eval_vs_random_interval
         self.eval_vs_random_games = eval_vs_random_games
         self.global_best_win_rate = 0.0
-
-        # LR decay: multiply LR by this factor per AlphaZero iteration.
-        # Applied BETWEEN iterations (not within batches), so Adam's
-        # momentum state stays consistent with the LR within each call.
-        self.lr_decay_factor = lr_decay_factor
-        self.lr_min = lr_min
-        self._iteration_count = 0
 
         # Arena parameters
         self.arena_games = arena_games
@@ -420,6 +426,7 @@ class AlphaZeroTrainer:
                 # Choose action based on the MCTS probabilities
                 action = np.random.choice(len(action_probs), p=action_probs)
                 _, reward, done, _ = env.step(action)
+                mcts.advance_root(action)
 
                 step += 1
 
@@ -606,36 +613,24 @@ class AlphaZeroTrainer:
             )
             return 0.0, 0.0, 0.0
 
-        # Pre-convert to tensors once (outside the epoch loop) to avoid
-        # repeated numpy→torch conversion overhead.
+        # Prepare training data
         states_arr, policies_arr, values_arr = zip(*all_examples)
-        all_states = torch.FloatTensor(np.array(states_arr)).to(self.device)
-        all_policies = torch.FloatTensor(np.array(policies_arr)).to(self.device)
-        all_values = torch.FloatTensor(np.array(values_arr).reshape(-1, 1)).to(self.device)
+        boards = torch.FloatTensor(np.array(states_arr).astype(np.float64)).to(self.device)
+        target_pis = torch.FloatTensor(np.array(policies_arr)).to(self.device)
+        target_vs = torch.FloatTensor(np.array(values_arr).astype(np.float64)).to(self.device)
 
         n = len(all_examples)
-        batches_per_epoch = (n + self.batch_size - 1) // self.batch_size
-        total_batches = batches_per_epoch * self.num_epochs
+        batch_count = int(n / self.batch_size)
+        total_batches = batch_count * self.num_epochs
 
         print(
             f"Training pool: {n} samples from {len(self.train_examples_history)} "
-            f"iterations | {self.num_epochs} epochs × {batches_per_epoch} batches = {total_batches} total"
+            f"iterations | {self.num_epochs} epochs × {batch_count} batches = {total_batches} total"
         )
 
-        # Compute current effective learning rate using per-iteration step decay.
-        # We use a decay PER AlphaZero iteration (not per batch), so Adam's
-        # momentum stays consistent with the LR within a single train_network
-        # call. Per-batch schedules like CosineAnnealing conflict with Adam
-        # because Adam's m/v state accumulates based on LR history.
-        current_lr = self.lr * (self.lr_decay_factor ** self._iteration_count)
-        current_lr = max(current_lr, self.lr_min)
-        for param_group in self.optimizer.param_groups:
-            param_group['lr'] = current_lr
-        print(
-            f"Learning rate this iteration: {current_lr:.6f} "
-            f"(base={self.lr}, decay={self.lr_decay_factor}^{self._iteration_count})"
-        )
-        self._iteration_count += 1
+        # Fresh optimizer every iteration — matches alpha-zero-general exactly.
+        # No momentum carryover, no LR decay, no weight_decay.
+        optimizer = optim.Adam(self.model.parameters())
 
         self.model.train()
 
@@ -644,39 +639,37 @@ class AlphaZeroTrainer:
         total_combined_loss = 0.0
 
         for epoch in range(self.num_epochs):
-            # Shuffle indices for this epoch
-            perm = torch.randperm(n, device=self.device)
+            # Random sampling WITH replacement — matches alpha-zero-general:
+            #   sample_ids = np.random.randint(len(examples), size=args.batch_size)
+            for _ in range(batch_count):
+                sample_ids = np.random.randint(n, size=self.batch_size)
+                batch_boards = boards[sample_ids]
+                batch_pis = target_pis[sample_ids]
+                batch_vs = target_vs[sample_ids]
 
-            for batch_start in range(0, n, self.batch_size):
-                batch_idx = perm[batch_start : batch_start + self.batch_size]
-                batch_states = all_states[batch_idx]
-                batch_policies = all_policies[batch_idx]
-                batch_values = all_values[batch_idx]
+                # Forward pass — model returns (log_softmax policy, tanh value)
+                out_pi, out_v = self.model(batch_boards)
 
-                # Forward pass
-                policy_logits, value_pred = self.model(batch_states)
+                # Loss — matches alpha-zero-general:
+                #   loss_pi = -sum(targets * log_probs) / N
+                #   loss_v  = sum((targets - preds)^2) / N
+                policy_loss = -torch.sum(batch_pis * out_pi) / batch_boards.size(0)
+                value_loss = torch.sum(
+                    (batch_vs - out_v.view(-1)) ** 2
+                ) / batch_boards.size(0)
+                combined_loss = policy_loss + value_loss
 
-                # Calculate loss (following AlphaZero paper exactly)
-                policy_loss = -torch.sum(
-                    batch_policies * torch.log_softmax(policy_logits, dim=1)
-                ) / batch_states.size(0)
-                value_loss = nn.MSELoss()(value_pred, batch_values)
-
-                # L2 regularization is handled by Adam's weight_decay parameter
-                combined_loss = value_loss + policy_loss
-
-                # Backward pass and optimization
-                self.optimizer.zero_grad()
+                optimizer.zero_grad()
                 combined_loss.backward()
-                self.optimizer.step()
+                optimizer.step()
 
                 total_policy_loss += policy_loss.item()
                 total_value_loss += value_loss.item()
                 total_combined_loss += combined_loss.item()
 
-        avg_policy_loss = total_policy_loss / total_batches
-        avg_value_loss = total_value_loss / total_batches
-        avg_total_loss = total_combined_loss / total_batches
+        avg_policy_loss = total_policy_loss / total_batches if total_batches > 0 else 0
+        avg_value_loss = total_value_loss / total_batches if total_batches > 0 else 0
+        avg_total_loss = total_combined_loss / total_batches if total_batches > 0 else 0
 
         # Record metrics
         self.policy_losses.append(avg_policy_loss)
@@ -724,6 +717,8 @@ class AlphaZeroTrainer:
         for game_idx in range(num_games):
             env = OthelloEnv(size=self.game_size)
             env.reset()
+            # Do NOT reset mcts tree between games — dict-based stats accumulate
+            # across the 30-game eval session, giving effectively deeper search.
 
             # First half: model plays Black (-1); second half: White (+1)
             model_player_id = -1 if game_idx < half else 1
@@ -744,6 +739,7 @@ class AlphaZeroTrainer:
                     action = random_player.get_action(env)
 
                 env.step(action)
+                mcts.advance_root(action)
 
             winner = env.board.get_winner()
             if winner == 0:
@@ -756,39 +752,60 @@ class AlphaZeroTrainer:
         win_rate = wins / num_games
         return win_rate, wins, losses, draws
 
-    def save_checkpoint(self, iteration, accepted_count=0, rejected_count=0):
-        """Save model checkpoint for an accepted iteration."""
-        checkpoint_file = f"{self.checkpoint_path}_{iteration}.pt"
-        torch.save(
-            {
-                "iteration": iteration,
-                "model_state_dict": self.model.state_dict(),
-                "optimizer_state_dict": self.optimizer.state_dict(),
-                "policy_losses": self.policy_losses,
-                "value_losses": self.value_losses,
-                "total_losses": self.total_losses,
-                "accepted_count": accepted_count,
-                "rejected_count": rejected_count,
-                "global_best_win_rate": self.global_best_win_rate,
-                "lr_iteration_count": self._iteration_count,
-            },
-            checkpoint_file,
-        )
-        print(f"Saved checkpoint: {checkpoint_file}")
+    def _build_checkpoint_dict(self, iteration, accepted_count=0, rejected_count=0):
+        """Build the checkpoint data dict (shared by save methods)."""
+        return {
+            "iteration": iteration,
+            "model_state_dict": self.model.state_dict(),
+            "policy_losses": self.policy_losses,
+            "value_losses": self.value_losses,
+            "total_losses": self.total_losses,
+            "accepted_count": accepted_count,
+            "rejected_count": rejected_count,
+            "global_best_win_rate": self.global_best_win_rate,
+        }
 
-        # Persist sliding-window training history alongside the checkpoint.
-        # Stored separately because the data is large (~100 MB) and we don't
-        # want to bloat the checkpoint pt file. Mirrors alpha-zero-general.
-        examples_file = checkpoint_file + ".examples"
+    def _save_training_examples(self, path):
+        """Save sliding-window training history to disk (like alpha-zero-general)."""
         try:
-            with open(examples_file, "wb") as f:
+            with open(path, "wb") as f:
                 pickle.dump(self.train_examples_history, f)
             print(
-                f"Saved training history: {examples_file} "
+                f"Saved training history: {path} "
                 f"({len(self.train_examples_history)} iterations)"
             )
         except Exception as e:
             print(f"Warning: failed to save training history: {e}")
+
+    def save_checkpoint(self, iteration, accepted_count=0, rejected_count=0):
+        """Save model checkpoint for an accepted iteration."""
+        checkpoint_file = f"{self.checkpoint_path}_{iteration}.pt"
+        torch.save(
+            self._build_checkpoint_dict(iteration, accepted_count, rejected_count),
+            checkpoint_file,
+        )
+        print(f"Saved checkpoint: {checkpoint_file}")
+        self._save_training_examples(checkpoint_file + ".examples")
+
+    def save_latest_checkpoint(self, iteration, accepted_count=0, rejected_count=0):
+        """Save checkpoint_latest.pt + training examples EVERY iteration.
+
+        Mirrors alpha-zero-general Coach.py behavior:
+        - saveTrainExamples() is called every iteration (line 100), not just on accept
+        - temp.pth.tar is kept as crash-recovery state
+
+        This ensures that:
+        1. Training examples are never lost on crash (the main bug this fixes)
+        2. Resume always picks up from the latest iteration, not the last accepted one
+        """
+        models_dir = os.path.dirname(self.checkpoint_path)
+        latest_ckpt = os.path.join(models_dir, "checkpoint_latest.pt")
+        torch.save(
+            self._build_checkpoint_dict(iteration, accepted_count, rejected_count),
+            latest_ckpt,
+        )
+        self._save_training_examples(latest_ckpt + ".examples")
+        print(f"Saved latest checkpoint: {latest_ckpt}")
 
     def load_checkpoint(self, path):
         """Load model checkpoint. Returns iteration number."""
@@ -796,14 +813,13 @@ class AlphaZeroTrainer:
         # and vice versa.
         checkpoint = torch.load(path, map_location=self.device)
         self.model.load_state_dict(checkpoint["model_state_dict"])
-        self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+        # No optimizer to restore — fresh Adam is created each iteration
         self.policy_losses = checkpoint.get("policy_losses", [])
         self.value_losses = checkpoint.get("value_losses", [])
         self.total_losses = checkpoint.get("total_losses", [])
         self._resumed_accepted_count = checkpoint.get("accepted_count", 0)
         self._resumed_rejected_count = checkpoint.get("rejected_count", 0)
         self.global_best_win_rate = checkpoint.get("global_best_win_rate", 0.0)
-        self._iteration_count = checkpoint.get("lr_iteration_count", 0)
 
         # Load sliding-window training history from sidecar .examples file
         examples_file = path + ".examples"
@@ -883,12 +899,6 @@ class AlphaZeroTrainer:
             print(
                 f"Next iteration: {start_iteration + 1}/{start_iteration + max_iterations}"
             )
-        else:
-            # Fresh training run: reset LR decay counter so calling train()
-            # a second time on the same trainer instance doesn't inherit
-            # decay state from the previous run.
-            self._iteration_count = 0
-
         # Adjust total iterations to ensure we train for the specified number regardless of resuming
         end_iteration = start_iteration + max_iterations
 
@@ -1007,6 +1017,8 @@ class AlphaZeroTrainer:
                 print(
                     f"Arena: ACCEPTED (first iteration) | Accepted: {accepted_count}, Rejected: {rejected_count}"
                 )
+                # Save latest (same as accepted checkpoint for first iter)
+                self.save_latest_checkpoint(iteration, accepted_count, rejected_count)
             else:
                 # Run arena evaluation
                 print(f"Arena evaluation: {self.arena_games} games...")
@@ -1044,6 +1056,11 @@ class AlphaZeroTrainer:
                 print(
                     f"Iteration {iteration}: Accepted: {accepted_count}, Rejected: {rejected_count}"
                 )
+
+                # Save latest checkpoint EVERY iteration (accept or reject).
+                # Model state here is already correct: accepted = new model,
+                # rejected = reverted to best. Training examples are always current.
+                self.save_latest_checkpoint(iteration, accepted_count, rejected_count)
 
             # Plot metrics
             if (iteration + 1) % 5 == 0 or iteration == end_iteration - 1:
