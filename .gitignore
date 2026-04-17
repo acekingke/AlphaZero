@@ -61,7 +61,7 @@ coverage.xml
 
 # AlphaZero specific
 logs/
-models/*.pt
+models/checkpoint_*.pt
 models/*.pt.examples
 models/__pycache__/
 *.h5
