@@ -1,6 +1,6 @@
 # AlphaZero 6x6 Othello
 
-基于 [alpha-zero-general](https://github.com/suragnair/alpha-zero-general) 的 AlphaZero 复现，在 6x6 黑白棋上训练和对弈。
+参考 [alpha-zero-general](https://github.com/suragnair/alpha-zero-general) 的 AlphaZero 复现，在 6x6 黑白棋上训练和对弈。
 
 ## 项目结构
 
