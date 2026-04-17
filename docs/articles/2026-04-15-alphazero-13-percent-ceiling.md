@@ -38,7 +38,7 @@ for epoch in range(self.num_epochs):
 
 每个 epoch 内部遍历 `batch_count = n / batch_size` 个 batch，`num_epochs=10` 约等于对每条样本期望看 10 次。我的旧代码用同样的变量名，做的事情少了一个数量级。
 
-问题出在我混淆了三个概念：一次梯度更新叫一个 **iteration**（或 gradient step），把整个训练集过一遍叫一个 **epoch**，每次喂进网络的一小批样本叫一个 **batch**。三者的关系是：一个 epoch = 数据集大小 / batch_size 个 iteration。我写 `num_epochs=100` 的时候脑子里想的是"过 100 遍数据"，但代码里跑的是 100 个 iteration——差了一个 `batch_count` 倍。如果训练 buffer 里有 5000 条样本、batch_size 是 128，那一个真正的 epoch 需要约 39 个 iteration，我的"100 个 epoch"连 3 个真正的 epoch 都不到。
+问题出在我混淆了三个概念：取一小批样本做一次梯度更新叫一个 **gradient step**，把整个训练集过一遍叫一个 **epoch**，每次喂进网络的那一小批样本叫一个 **batch**。三者的关系是：一个 epoch = 数据集大小 / batch_size 个 gradient step。我写 `num_epochs=100` 的时候脑子里想的是"过 100 遍数据"，但代码里跑的是 100 个 gradient step——差了一个 `batch_count` 倍。如果训练 buffer 里有 5000 条样本、batch_size 是 128，那一个真正的 epoch 需要约 39 个 gradient step，我的"100 个 epoch"连 3 个真正的 epoch 都不到。
 
 **训练 buffer 没有滑动窗口。** 十几轮自我对弈产生的所有数据，从第 1 轮到第 15 轮，全部堆在同一个训练集里。第 1 轮的策略是什么水平？几乎是随机走子。第 15 轮呢？已经比随机稍强一点。把这两代策略产生的棋谱混在一起喂给网络，等于让它同时学两套互相矛盾的下法。旧数据像锚一样拖住新策略，网络学到的是所有历史版本的平均值——一个谁也不像的折中。加上"只保留最近 20 轮数据"的滑动窗口之后，训练集的策略分布才不再自相矛盾。
 
