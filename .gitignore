@@ -85,6 +85,10 @@ venv.bak/
 
 # speckit-installed skills (per agent folder security warning)
 .claude/
+.specify/
+
+# Documentation (kept local, not version-controlled)
+docs/
 
 # Debug/analysis scripts and logs
 *.log
